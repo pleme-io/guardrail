@@ -1,0 +1,110 @@
+- name: akeyless-delete-role-association
+  pattern: (?i)akeyless\s+delete\-role\-association\b
+  severity: block
+  message: deleteRoleAssociation — destructive operation
+  category: akeyless
+- name: akeyless-delete-target-association
+  pattern: (?i)akeyless\s+delete\-target\-association\b
+  severity: block
+  message: deleteTargetAssociation — destructive operation
+  category: akeyless
+- name: akeyless-delete-auth-method
+  pattern: (?i)akeyless\s+delete\-auth\-method\b
+  severity: block
+  message: deleteAuthMethod — destructive operation
+  category: akeyless
+- name: akeyless-delete-auth-methods
+  pattern: (?i)akeyless\s+delete\-auth\-methods\b
+  severity: block
+  message: deleteAuthMethods — destructive operation
+  category: akeyless
+- name: akeyless-delete-event-forwarder
+  pattern: (?i)akeyless\s+delete\-event\-forwarder\b
+  severity: warn
+  message: deleteEventForwarder — destructive operation
+  category: akeyless
+- name: akeyless-delete-item
+  pattern: (?i)akeyless\s+delete\-item\b
+  severity: block
+  message: deleteItem — destructive operation
+  category: akeyless
+- name: akeyless-delete-items
+  pattern: (?i)akeyless\s+delete\-items\b
+  severity: block
+  message: deleteItems — destructive operation
+  category: akeyless
+- name: akeyless-delete-role
+  pattern: (?i)akeyless\s+delete\-role\b
+  severity: block
+  message: deleteRole — destructive operation
+  category: akeyless
+- name: akeyless-delete-role-rule
+  pattern: (?i)akeyless\s+delete\-role\-rule\b
+  severity: block
+  message: deleteRoleRule — destructive operation
+  category: akeyless
+- name: akeyless-delete-roles
+  pattern: (?i)akeyless\s+delete\-roles\b
+  severity: block
+  message: deleteRoles — destructive operation
+  category: akeyless
+- name: akeyless-delete-target
+  pattern: (?i)akeyless\s+delete\-target\b
+  severity: block
+  message: deleteTarget — destructive operation
+  category: akeyless
+- name: akeyless-delete-targets
+  pattern: (?i)akeyless\s+delete\-targets\b
+  severity: block
+  message: deleteTargets — destructive operation
+  category: akeyless
+- name: akeyless-gateway-delete-allowed-management-access
+  pattern: (?i)akeyless\s+gateway\-delete\-allowed\-management\-access\b
+  severity: block
+  message: gatewayDeleteAllowedManagementAccess — destructive operation
+  category: akeyless
+- name: akeyless-gateway-delete-k8-s-auth-config
+  pattern: (?i)akeyless\s+gateway\-delete\-k8\-s\-auth\-config\b
+  severity: block
+  message: gatewayDeleteK8SAuthConfig — destructive operation
+  category: akeyless
+- name: akeyless-gateway-delete-migration
+  pattern: (?i)akeyless\s+gateway\-delete\-migration\b
+  severity: block
+  message: gatewayDeleteMigration — destructive operation
+  category: akeyless
+- name: akeyless-gateway-delete-producer
+  pattern: (?i)akeyless\s+gateway\-delete\-producer\b
+  severity: block
+  message: gatewayDeleteProducer — destructive operation
+  category: akeyless
+- name: akeyless-gateway-revoke-tmp-users
+  pattern: (?i)akeyless\s+gateway\-revoke\-tmp\-users\b
+  severity: block
+  message: gatewayRevokeTmpUsers — destructive operation
+  category: akeyless
+- name: akeyless-kmip-client-delete-rule
+  pattern: (?i)akeyless\s+kmip\-client\-delete\-rule\b
+  severity: warn
+  message: kmipClientDeleteRule — destructive operation
+  category: akeyless
+- name: akeyless-kmip-delete-client
+  pattern: (?i)akeyless\s+kmip\-delete\-client\b
+  severity: warn
+  message: kmipDeleteClient — destructive operation
+  category: akeyless
+- name: akeyless-kmip-delete-server
+  pattern: (?i)akeyless\s+kmip\-delete\-server\b
+  severity: block
+  message: kmipDeleteServer — destructive operation
+  category: akeyless
+- name: akeyless-revoke-creds
+  pattern: (?i)akeyless\s+revoke\-creds\b
+  severity: warn
+  message: revoke-creds — destructive operation
+  category: akeyless
+- name: akeyless-uid-revoke-token
+  pattern: (?i)akeyless\s+uid\-revoke\-token\b
+  severity: warn
+  message: uidRevokeToken — destructive operation
+  category: akeyless
