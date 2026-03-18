@@ -6,36 +6,48 @@
   severity: block
   message: "AWS EC2 instance termination"
   category: cloud
+  test_block: "aws ec2 terminate-instances --instance-ids i-1234567890abcdef0"
+  test_allow: "aws ec2 describe-instances"
 
 - name: aws-ec2-delete-volume
   pattern: 'aws\s+ec2\s+delete-volume'
   severity: block
   message: "AWS EBS volume deletion — data loss"
   category: cloud
+  test_block: "aws ec2 delete-volume --volume-id vol-049df61146c4d7901"
+  test_allow: "aws ec2 describe-volumes"
 
 - name: aws-ec2-delete-snapshot
   pattern: 'aws\s+ec2\s+delete-snapshot'
   severity: warn
   message: "AWS EBS snapshot deletion"
   category: cloud
+  test_block: "aws ec2 delete-snapshot --snapshot-id snap-1234567890abcdef0"
+  test_allow: "aws ec2 describe-snapshots"
 
 - name: aws-ec2-delete-vpc
   pattern: 'aws\s+ec2\s+delete-vpc'
   severity: block
   message: "AWS VPC deletion"
   category: cloud
+  test_block: "aws ec2 delete-vpc --vpc-id vpc-1234567890abcdef0"
+  test_allow: "aws ec2 describe-vpcs"
 
 - name: aws-ec2-delete-subnet
   pattern: 'aws\s+ec2\s+delete-subnet'
   severity: warn
   message: "AWS subnet deletion"
   category: cloud
+  test_block: "aws ec2 delete-subnet --subnet-id subnet-1234567890abcdef0"
+  test_allow: "aws ec2 describe-subnets"
 
 - name: aws-ec2-delete-security-group
   pattern: 'aws\s+ec2\s+delete-security-group'
   severity: warn
   message: "AWS security group deletion"
   category: cloud
+  test_block: "aws ec2 delete-security-group --group-id sg-1234567890abcdef0"
+  test_allow: "aws ec2 describe-security-groups"
 
 # ── Storage ────────────────────────────────────────────────────
 - name: aws-s3-rb-force
@@ -43,12 +55,16 @@
   severity: block
   message: "AWS S3 force-remove bucket"
   category: cloud
+  test_block: "aws s3 rb s3://my-bucket --force"
+  test_allow: "aws s3 ls s3://my-bucket"
 
 - name: aws-s3-rm-recursive
   pattern: 'aws\s+s3\s+rm\s+.*--recursive'
   severity: warn
   message: "AWS S3 recursive delete"
   category: cloud
+  test_block: "aws s3 rm s3://my-bucket/prefix/ --recursive"
+  test_allow: "aws s3 ls s3://my-bucket"
 
 # ── Database ───────────────────────────────────────────────────
 - name: aws-rds-delete-instance
@@ -56,24 +72,32 @@
   severity: block
   message: "AWS RDS instance deletion"
   category: cloud
+  test_block: "aws rds delete-db-instance --db-instance-identifier mydb"
+  test_allow: "aws rds describe-db-instances"
 
 - name: aws-rds-delete-cluster
   pattern: 'aws\s+rds\s+delete-db-cluster'
   severity: block
   message: "AWS RDS cluster deletion"
   category: cloud
+  test_block: "aws rds delete-db-cluster --db-cluster-identifier mycluster"
+  test_allow: "aws rds describe-db-clusters"
 
 - name: aws-dynamodb-delete-table
   pattern: 'aws\s+dynamodb\s+delete-table'
   severity: block
   message: "AWS DynamoDB table deletion"
   category: cloud
+  test_block: "aws dynamodb delete-table --table-name MyTable"
+  test_allow: "aws dynamodb describe-table --table-name MyTable"
 
 - name: aws-elasticache-delete
   pattern: 'aws\s+elasticache\s+delete-(cache-cluster|replication-group)'
   severity: block
   message: "AWS ElastiCache deletion"
   category: cloud
+  test_block: "aws elasticache delete-cache-cluster --cache-cluster-id my-cache"
+  test_allow: "aws elasticache describe-cache-clusters"
 
 # ── Containers ─────────────────────────────────────────────────
 - name: aws-eks-delete-cluster
@@ -81,24 +105,32 @@
   severity: block
   message: "AWS EKS cluster deletion"
   category: cloud
+  test_block: "aws eks delete-cluster --name my-cluster"
+  test_allow: "aws eks describe-cluster --name my-cluster"
 
 - name: aws-ecs-delete-cluster
   pattern: 'aws\s+ecs\s+delete-cluster'
   severity: block
   message: "AWS ECS cluster deletion"
   category: cloud
+  test_block: "aws ecs delete-cluster --cluster my-cluster"
+  test_allow: "aws ecs describe-clusters --clusters my-cluster"
 
 - name: aws-ecs-delete-service
   pattern: 'aws\s+ecs\s+delete-service'
   severity: warn
   message: "AWS ECS service deletion"
   category: cloud
+  test_block: "aws ecs delete-service --cluster my-cluster --service my-service"
+  test_allow: "aws ecs describe-services --cluster my-cluster --services my-service"
 
 - name: aws-ecr-delete-repository
   pattern: 'aws\s+ecr\s+delete-repository'
   severity: block
   message: "AWS ECR repository deletion — all images lost"
   category: cloud
+  test_block: "aws ecr delete-repository --repository-name my-repo --force"
+  test_allow: "aws ecr describe-repositories"
 
 # ── Serverless ─────────────────────────────────────────────────
 - name: aws-lambda-delete-function
@@ -106,6 +138,8 @@
   severity: warn
   message: "AWS Lambda function deletion"
   category: cloud
+  test_block: "aws lambda delete-function --function-name my-function"
+  test_allow: "aws lambda list-functions"
 
 # ── Infrastructure ─────────────────────────────────────────────
 - name: aws-cloudformation-delete-stack
@@ -113,6 +147,8 @@
   severity: block
   message: "AWS CloudFormation stack deletion — destroys all stack resources"
   category: cloud
+  test_block: "aws cloudformation delete-stack --stack-name my-stack"
+  test_allow: "aws cloudformation describe-stacks"
 
 # ── IAM ────────────────────────────────────────────────────────
 - name: aws-iam-delete-role
@@ -120,18 +156,24 @@
   severity: warn
   message: "AWS IAM role deletion"
   category: cloud
+  test_block: "aws iam delete-role --role-name my-role"
+  test_allow: "aws iam list-roles"
 
 - name: aws-iam-delete-user
   pattern: 'aws\s+iam\s+delete-user\b'
   severity: block
   message: "AWS IAM user deletion"
   category: cloud
+  test_block: "aws iam delete-user --user-name my-user"
+  test_allow: "aws iam list-users"
 
 - name: aws-iam-delete-policy
   pattern: 'aws\s+iam\s+delete-policy\b'
   severity: warn
   message: "AWS IAM policy deletion"
   category: cloud
+  test_block: "aws iam delete-policy --policy-arn arn:aws:iam::123456789012:policy/my-policy"
+  test_allow: "aws iam list-policies"
 
 # ── DNS ────────────────────────────────────────────────────────
 - name: aws-route53-delete-hosted-zone
@@ -139,6 +181,8 @@
   severity: block
   message: "AWS Route53 hosted zone deletion — DNS records lost"
   category: cloud
+  test_block: "aws route53 delete-hosted-zone --id Z1234567890ABC"
+  test_allow: "aws route53 list-hosted-zones"
 
 # ── Secrets/KMS ────────────────────────────────────────────────
 - name: aws-secretsmanager-delete
@@ -146,12 +190,16 @@
   severity: block
   message: "AWS Secrets Manager secret deletion"
   category: cloud
+  test_block: "aws secretsmanager delete-secret --secret-id my-secret"
+  test_allow: "aws secretsmanager list-secrets"
 
 - name: aws-kms-schedule-delete
   pattern: 'aws\s+kms\s+schedule-key-deletion'
   severity: block
   message: "AWS KMS key deletion — encrypted data becomes unrecoverable"
   category: cloud
+  test_block: "aws kms schedule-key-deletion --key-id 1234abcd-12ab-34cd-56ef-1234567890ab"
+  test_allow: "aws kms list-keys"
 
 # ── Messaging ──────────────────────────────────────────────────
 - name: aws-sqs-delete-queue
@@ -159,9 +207,13 @@
   severity: warn
   message: "AWS SQS queue deletion"
   category: cloud
+  test_block: "aws sqs delete-queue --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+  test_allow: "aws sqs list-queues"
 
 - name: aws-sns-delete-topic
   pattern: 'aws\s+sns\s+delete-topic'
   severity: warn
   message: "AWS SNS topic deletion"
   category: cloud
+  test_block: "aws sns delete-topic --topic-arn arn:aws:sns:us-east-1:123456789012:my-topic"
+  test_allow: "aws sns list-topics"

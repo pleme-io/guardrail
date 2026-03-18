@@ -1,4 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 use std::{env, fs};
 
 use crate::model::Rule;
@@ -65,22 +66,22 @@ pub struct FsFingerprinter {
 
 impl Fingerprinter for FsFingerprinter {
     fn fingerprint(&self) -> u64 {
-        let mut hash: u64 = 0;
+        let mut hasher = std::hash::DefaultHasher::new();
         if let Ok(meta) = fs::metadata(&self.config_path) {
             if let Ok(mtime) = meta.modified() {
-                hash ^= mtime_nanos(mtime);
+                mtime_nanos(mtime).hash(&mut hasher);
             }
         }
         if let Ok(entries) = fs::read_dir(&self.rules_dir) {
             for entry in entries.flatten() {
                 if let Ok(meta) = entry.metadata() {
                     if let Ok(mtime) = meta.modified() {
-                        hash ^= mtime_nanos(mtime);
+                        mtime_nanos(mtime).hash(&mut hasher);
                     }
                 }
             }
         }
-        hash
+        hasher.finish()
     }
 }
 
@@ -164,16 +165,8 @@ pub fn resolve_cached(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Category, Severity};
-
     fn test_rules() -> Vec<Rule> {
-        vec![Rule {
-            name: "test".into(),
-            pattern: "test".into(),
-            severity: Severity::Block,
-            message: "test".into(),
-            category: Category::Filesystem,
-        }]
+        vec![Rule::builder("test", "test").message("test").build()]
     }
 
     #[test]

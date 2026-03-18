@@ -3,28 +3,40 @@
   severity: block
   message: "iptables -F flushes all firewall rules"
   category: network
+  test_block: "iptables -F"
+  test_allow: "iptables -L"
 - name: iptables-delete-chain
   pattern: 'iptables\s+-X'
   severity: block
   message: "iptables -X deletes user-defined chains"
   category: network
+  test_block: "iptables -X"
+  test_allow: "iptables -L"
 - name: ufw-disable
   pattern: 'ufw\s+disable'
   severity: block
   message: "ufw disable turns off the firewall"
   category: network
+  test_block: "ufw disable"
+  test_allow: "ufw status"
 - name: ip-link-delete
   pattern: 'ip\s+link\s+delete\s'
   severity: block
   message: "ip link delete removes a network interface"
   category: network
+  test_block: "ip link delete eth0"
+  test_allow: "ip link show"
 - name: nft-flush
   pattern: 'nft\s+flush\s+ruleset'
   severity: block
   message: "nft flush ruleset removes all nftables rules"
   category: network
+  test_block: "nft flush ruleset"
+  test_allow: "nft list ruleset"
 - name: firewalld-stop
   pattern: 'systemctl\s+stop\s+firewalld'
   severity: block
   message: "Stopping firewalld disables the firewall"
   category: network
+  test_block: "systemctl stop firewalld"
+  test_allow: "systemctl status firewalld"

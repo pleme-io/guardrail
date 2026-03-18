@@ -6,24 +6,32 @@
   severity: block
   message: "GCP compute instance deletion"
   category: cloud
+  test_block: "gcloud compute instances delete my-instance --zone us-central1-a"
+  test_allow: "gcloud compute instances list"
 
 - name: gcloud-compute-delete-disk
   pattern: 'gcloud\s+compute\s+disks\s+delete'
   severity: block
   message: "GCP persistent disk deletion"
   category: cloud
+  test_block: "gcloud compute disks delete my-disk --zone us-central1-a"
+  test_allow: "gcloud compute disks list"
 
 - name: gcloud-compute-delete-firewall
   pattern: 'gcloud\s+compute\s+firewall-rules\s+delete'
   severity: warn
   message: "GCP firewall rule deletion"
   category: cloud
+  test_block: "gcloud compute firewall-rules delete allow-http"
+  test_allow: "gcloud compute firewall-rules list"
 
 - name: gcloud-compute-delete-network
   pattern: 'gcloud\s+compute\s+networks\s+delete'
   severity: block
   message: "GCP VPC network deletion"
   category: cloud
+  test_block: "gcloud compute networks delete my-network"
+  test_allow: "gcloud compute networks list"
 
 # ── Containers ─────────────────────────────────────────────────
 - name: gcloud-gke-delete
@@ -31,6 +39,8 @@
   severity: block
   message: "GCP GKE cluster deletion"
   category: cloud
+  test_block: "gcloud container clusters delete my-cluster --zone us-central1-a"
+  test_allow: "gcloud container clusters list"
 
 # ── Database ───────────────────────────────────────────────────
 - name: gcloud-sql-delete
@@ -38,18 +48,24 @@
   severity: block
   message: "GCP Cloud SQL instance deletion"
   category: cloud
+  test_block: "gcloud sql instances delete my-instance"
+  test_allow: "gcloud sql instances list"
 
 - name: gcloud-spanner-delete
   pattern: 'gcloud\s+spanner\s+(instances|databases)\s+delete'
   severity: block
   message: "GCP Cloud Spanner deletion"
   category: cloud
+  test_block: "gcloud spanner instances delete my-instance"
+  test_allow: "gcloud spanner instances list"
 
 - name: gcloud-bigtable-delete
   pattern: 'gcloud\s+bigtable\s+instances\s+delete'
   severity: block
   message: "GCP Bigtable instance deletion"
   category: cloud
+  test_block: "gcloud bigtable instances delete my-instance"
+  test_allow: "gcloud bigtable instances list"
 
 # ── Storage ────────────────────────────────────────────────────
 - name: gsutil-rm-recursive
@@ -57,6 +73,8 @@
   severity: block
   message: "GCP Cloud Storage bucket/recursive deletion"
   category: cloud
+  test_block: "gsutil rm -r gs://my-bucket"
+  test_allow: "gsutil ls gs://my-bucket"
 
 # ── Serverless ─────────────────────────────────────────────────
 - name: gcloud-functions-delete
@@ -64,12 +82,16 @@
   severity: warn
   message: "GCP Cloud Function deletion"
   category: cloud
+  test_block: "gcloud functions delete my-function --region us-central1"
+  test_allow: "gcloud functions list"
 
 - name: gcloud-run-delete
   pattern: 'gcloud\s+run\s+services\s+delete'
   severity: warn
   message: "GCP Cloud Run service deletion"
   category: cloud
+  test_block: "gcloud run services delete my-service --region us-central1"
+  test_allow: "gcloud run services list"
 
 # ── Project ────────────────────────────────────────────────────
 - name: gcloud-project-delete
@@ -77,6 +99,8 @@
   severity: block
   message: "GCP project deletion — destroys everything"
   category: cloud
+  test_block: "gcloud projects delete my-project-id"
+  test_allow: "gcloud projects list"
 
 # ── Pub/Sub ────────────────────────────────────────────────────
 - name: gcloud-pubsub-delete-topic
@@ -84,6 +108,8 @@
   severity: warn
   message: "GCP Pub/Sub topic deletion"
   category: cloud
+  test_block: "gcloud pubsub topics delete my-topic"
+  test_allow: "gcloud pubsub topics list"
 
 # ── BigQuery ───────────────────────────────────────────────────
 - name: bq-rm-dataset
@@ -91,3 +117,5 @@
   severity: block
   message: "BigQuery dataset/table deletion"
   category: cloud
+  test_block: "bq rm -r -f my-project:my-dataset"
+  test_allow: "bq ls my-project:my-dataset"

@@ -1,10 +1,9 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use anyhow::Context;
 
-use crate::model::{Category, GuardrailConfig, Rule};
+use crate::model::{GuardrailConfig, Rule};
 
 const DEFAULTS_YAML: &str = include_str!("../rules/defaults.yaml");
 
@@ -178,17 +177,15 @@ pub fn resolve_rules(defaults: &[Rule], config: &GuardrailConfig) -> Vec<Rule> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Severity;
+    use crate::model::Category;
+    use std::collections::BTreeMap;
     use tempfile::TempDir;
 
     fn test_rule(name: &str, category: Category) -> Rule {
-        Rule {
-            name: name.into(),
-            pattern: name.into(),
-            severity: Severity::Block,
-            message: format!("{name} rule"),
-            category,
-        }
+        Rule::builder(name, name)
+            .message(format!("{name} rule"))
+            .category(category)
+            .build()
     }
 
     // ─── DefaultsProvider ────────────────────────────────────────

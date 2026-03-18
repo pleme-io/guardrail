@@ -114,12 +114,12 @@ fn cmd_validate() -> Result<()> {
 
 fn cmd_list() -> Result<()> {
     let engine = build_engine()?;
-    for rule in &engine.rules() {
+    for rule in engine.rules() {
         let sev = match rule.severity {
             guardrail::Severity::Block => "BLOCK",
             guardrail::Severity::Warn => "WARN ",
         };
-        eprintln!("[{sev}] {:<30} {:?}  {}", rule.name, rule.category, rule.message);
+        eprintln!("[{sev}] {:<30} {}  {}", rule.name, rule.category, rule.message);
     }
     eprintln!("\n{} rules active", engine.rule_count());
     Ok(())

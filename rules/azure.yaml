@@ -6,18 +6,24 @@
   severity: block
   message: "Azure VM deletion"
   category: cloud
+  test_block: "az vm delete --name my-vm --resource-group my-rg --yes"
+  test_allow: "az vm list"
 
 - name: az-vmss-delete
   pattern: 'az\s+vmss\s+delete'
   severity: block
   message: "Azure VM Scale Set deletion"
   category: cloud
+  test_block: "az vmss delete --name my-vmss --resource-group my-rg"
+  test_allow: "az vmss list"
 
 - name: az-disk-delete
   pattern: 'az\s+disk\s+delete'
   severity: warn
   message: "Azure managed disk deletion"
   category: cloud
+  test_block: "az disk delete --name my-disk --resource-group my-rg --yes"
+  test_allow: "az disk list"
 
 # ── Containers ─────────────────────────────────────────────────
 - name: az-aks-delete
@@ -25,12 +31,16 @@
   severity: block
   message: "Azure AKS cluster deletion"
   category: cloud
+  test_block: "az aks delete --name my-cluster --resource-group my-rg --yes"
+  test_allow: "az aks list"
 
 - name: az-acr-delete
   pattern: 'az\s+acr\s+delete'
   severity: block
   message: "Azure Container Registry deletion"
   category: cloud
+  test_block: "az acr delete --name myregistry --yes"
+  test_allow: "az acr list"
 
 # ── Database ───────────────────────────────────────────────────
 - name: az-sql-server-delete
@@ -38,18 +48,24 @@
   severity: block
   message: "Azure SQL server deletion"
   category: cloud
+  test_block: "az sql server delete --name my-server --resource-group my-rg --yes"
+  test_allow: "az sql server list"
 
 - name: az-sql-db-delete
   pattern: 'az\s+sql\s+db\s+delete'
   severity: block
   message: "Azure SQL database deletion"
   category: cloud
+  test_block: "az sql db delete --name mydb --server my-server --resource-group my-rg --yes"
+  test_allow: "az sql db list --server my-server --resource-group my-rg"
 
 - name: az-cosmosdb-delete
   pattern: 'az\s+cosmosdb\s+delete'
   severity: block
   message: "Azure Cosmos DB account deletion"
   category: cloud
+  test_block: "az cosmosdb delete --name my-cosmos --resource-group my-rg --yes"
+  test_allow: "az cosmosdb list"
 
 # ── Storage ────────────────────────────────────────────────────
 - name: az-storage-account-delete
@@ -57,12 +73,16 @@
   severity: block
   message: "Azure storage account deletion"
   category: cloud
+  test_block: "az storage account delete --name mystorageaccount --resource-group my-rg --yes"
+  test_allow: "az storage account list"
 
 - name: az-storage-container-delete
   pattern: 'az\s+storage\s+container\s+delete'
   severity: warn
   message: "Azure storage container deletion"
   category: cloud
+  test_block: "az storage container delete --name mycontainer --account-name mystorageaccount"
+  test_allow: "az storage container list --account-name mystorageaccount"
 
 # ── Resource Groups ────────────────────────────────────────────
 - name: az-group-delete
@@ -70,6 +90,8 @@
   severity: block
   message: "Azure resource group deletion — destroys all resources"
   category: cloud
+  test_block: "az group delete --name my-rg --yes"
+  test_allow: "az group list"
 
 # ── Serverless ─────────────────────────────────────────────────
 - name: az-functionapp-delete
@@ -77,12 +99,16 @@
   severity: warn
   message: "Azure Function App deletion"
   category: cloud
+  test_block: "az functionapp delete --name my-func --resource-group my-rg"
+  test_allow: "az functionapp list"
 
 - name: az-webapp-delete
   pattern: 'az\s+webapp\s+delete'
   severity: warn
   message: "Azure Web App deletion"
   category: cloud
+  test_block: "az webapp delete --name my-app --resource-group my-rg"
+  test_allow: "az webapp list"
 
 # ── Secrets ────────────────────────────────────────────────────
 - name: az-keyvault-delete
@@ -90,12 +116,16 @@
   severity: block
   message: "Azure Key Vault deletion"
   category: cloud
+  test_block: "az keyvault delete --name my-vault"
+  test_allow: "az keyvault list"
 
 - name: az-keyvault-secret-delete
   pattern: 'az\s+keyvault\s+secret\s+delete'
   severity: block
   message: "Azure Key Vault secret deletion"
   category: cloud
+  test_block: "az keyvault secret delete --name my-secret --vault-name my-vault"
+  test_allow: "az keyvault secret list --vault-name my-vault"
 
 # ── Network ────────────────────────────────────────────────────
 - name: az-network-vnet-delete
@@ -103,12 +133,16 @@
   severity: block
   message: "Azure VNet deletion"
   category: cloud
+  test_block: "az network vnet delete --name my-vnet --resource-group my-rg"
+  test_allow: "az network vnet list"
 
 - name: az-network-nsg-delete
   pattern: 'az\s+network\s+nsg\s+delete'
   severity: warn
   message: "Azure NSG deletion"
   category: cloud
+  test_block: "az network nsg delete --name my-nsg --resource-group my-rg"
+  test_allow: "az network nsg list"
 
 # ── DNS ────────────────────────────────────────────────────────
 - name: az-dns-zone-delete
@@ -116,3 +150,5 @@
   severity: block
   message: "Azure DNS zone deletion"
   category: cloud
+  test_block: "az network dns zone delete --name example.com --resource-group my-rg --yes"
+  test_allow: "az network dns zone list"

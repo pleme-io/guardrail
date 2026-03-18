@@ -7,102 +7,136 @@
   severity: block
   message: "DROP TABLE — irreversible data loss"
   category: database
+  test_block: "psql -c 'DROP TABLE users'"
+  test_allow: "psql -c 'SELECT * FROM users'"
 
 - name: sql-suite-drop-database
   pattern: '(?i)\bDROP\s+DATABASE\b'
   severity: block
   message: "DROP DATABASE — destroys entire database"
   category: database
+  test_block: "psql -c 'DROP DATABASE mydb'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: sql-suite-drop-schema
   pattern: '(?i)\bDROP\s+SCHEMA\b'
   severity: block
   message: "DROP SCHEMA — destroys all objects in schema"
   category: database
+  test_block: "psql -c 'DROP SCHEMA public CASCADE'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: sql-drop-index
   pattern: '(?i)\bDROP\s+INDEX\b'
   severity: warn
   message: "DROP INDEX — may degrade query performance"
   category: database
+  test_block: "psql -c 'DROP INDEX idx_users_email'"
+  test_allow: "psql -c 'SELECT * FROM users'"
 
 - name: sql-drop-view
   pattern: '(?i)\bDROP\s+VIEW\b'
   severity: warn
   message: "DROP VIEW — removes view definition"
   category: database
+  test_block: "psql -c 'DROP VIEW active_users'"
+  test_allow: "psql -c 'SELECT * FROM active_users'"
 
 - name: sql-drop-function
   pattern: '(?i)\bDROP\s+FUNCTION\b'
   severity: warn
   message: "DROP FUNCTION — removes stored function"
   category: database
+  test_block: "psql -c 'DROP FUNCTION my_func()'"
+  test_allow: "psql -c 'SELECT my_func()'"
 
 - name: sql-drop-procedure
   pattern: '(?i)\bDROP\s+PROCEDURE\b'
   severity: warn
   message: "DROP PROCEDURE — removes stored procedure"
   category: database
+  test_block: "psql -c 'DROP PROCEDURE my_proc'"
+  test_allow: "psql -c 'CALL my_proc()'"
 
 - name: sql-drop-trigger
   pattern: '(?i)\bDROP\s+TRIGGER\b'
   severity: warn
   message: "DROP TRIGGER — removes database trigger"
   category: database
+  test_block: "psql -c 'DROP TRIGGER my_trigger ON users'"
+  test_allow: "psql -c 'SELECT * FROM users'"
 
 - name: sql-drop-sequence
   pattern: '(?i)\bDROP\s+SEQUENCE\b'
   severity: warn
   message: "DROP SEQUENCE — removes auto-increment sequence"
   category: database
+  test_block: "psql -c 'DROP SEQUENCE users_id_seq'"
+  test_allow: "psql -c 'SELECT nextval(users_id_seq)'"
 
 - name: sql-drop-type
   pattern: '(?i)\bDROP\s+TYPE\b'
   severity: warn
   message: "DROP TYPE — removes custom type"
   category: database
+  test_block: "psql -c 'DROP TYPE my_enum'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: sql-drop-extension
   pattern: '(?i)\bDROP\s+EXTENSION\b'
   severity: warn
   message: "DROP EXTENSION — removes PostgreSQL extension"
   category: database
+  test_block: "psql -c 'DROP EXTENSION pgcrypto'"
+  test_allow: "psql -c 'SELECT * FROM pg_extension'"
 
 - name: sql-drop-role
   pattern: '(?i)\bDROP\s+(ROLE|USER)\b'
   severity: block
   message: "DROP ROLE/USER — removes database user"
   category: database
+  test_block: "psql -c 'DROP ROLE readonly'"
+  test_allow: "psql -c 'SELECT * FROM pg_roles'"
 
 - name: sql-drop-tablespace
   pattern: '(?i)\bDROP\s+TABLESPACE\b'
   severity: block
   message: "DROP TABLESPACE — removes storage allocation"
   category: database
+  test_block: "psql -c 'DROP TABLESPACE my_tablespace'"
+  test_allow: "psql -c 'SELECT * FROM pg_tablespace'"
 
 - name: sql-drop-materialized-view
   pattern: '(?i)\bDROP\s+MATERIALIZED\s+VIEW\b'
   severity: warn
   message: "DROP MATERIALIZED VIEW — removes cached query results"
   category: database
+  test_block: "psql -c 'DROP MATERIALIZED VIEW mv_stats'"
+  test_allow: "psql -c 'REFRESH MATERIALIZED VIEW mv_stats'"
 
 - name: sql-drop-publication
   pattern: '(?i)\bDROP\s+PUBLICATION\b'
   severity: block
   message: "DROP PUBLICATION — breaks logical replication"
   category: database
+  test_block: "psql -c 'DROP PUBLICATION my_pub'"
+  test_allow: "psql -c 'SELECT * FROM pg_publication'"
 
 - name: sql-drop-subscription
   pattern: '(?i)\bDROP\s+SUBSCRIPTION\b'
   severity: block
   message: "DROP SUBSCRIPTION — breaks logical replication"
   category: database
+  test_block: "psql -c 'DROP SUBSCRIPTION my_sub'"
+  test_allow: "psql -c 'SELECT * FROM pg_subscription'"
 
 - name: sql-drop-owned
   pattern: '(?i)\bDROP\s+OWNED\b'
   severity: block
   message: "DROP OWNED — drops all objects owned by a role"
   category: database
+  test_block: "psql -c 'DROP OWNED BY old_user'"
+  test_allow: "psql -c 'SELECT * FROM pg_roles'"
 
 # ── TRUNCATE ───────────────────────────────────────────────────
 - name: sql-suite-truncate-table
@@ -110,6 +144,8 @@
   severity: block
   message: "TRUNCATE — deletes all rows without logging, cannot rollback"
   category: database
+  test_block: "psql -c 'TRUNCATE TABLE logs'"
+  test_allow: "psql -c 'SELECT * FROM logs'"
 
 # ── DELETE without WHERE ───────────────────────────────────────
 - name: sql-suite-delete-no-where
@@ -117,6 +153,8 @@
   severity: block
   message: "DELETE FROM without WHERE — deletes all rows"
   category: database
+  test_block: "psql -c 'DELETE FROM users'"
+  test_allow: "psql -c 'DELETE FROM users WHERE id = 5'"
 
 # ── ALTER destructive ──────────────────────────────────────────
 - name: sql-alter-drop-column
@@ -124,18 +162,24 @@
   severity: block
   message: "ALTER TABLE DROP COLUMN — irreversible data loss"
   category: database
+  test_block: "psql -c 'ALTER TABLE users DROP COLUMN email'"
+  test_allow: "psql -c 'ALTER TABLE users ADD COLUMN email TEXT'"
 
 - name: sql-alter-drop-constraint
   pattern: '(?i)\bALTER\s+TABLE\s+\w+\s+DROP\s+CONSTRAINT\b'
   severity: warn
   message: "ALTER TABLE DROP CONSTRAINT — removes data integrity check"
   category: database
+  test_block: "psql -c 'ALTER TABLE users DROP CONSTRAINT users_email_key'"
+  test_allow: "psql -c 'ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email)'"
 
 - name: sql-alter-rename-column
   pattern: '(?i)\bALTER\s+TABLE\s+\w+\s+RENAME\s+COLUMN\b'
   severity: warn
   message: "ALTER TABLE RENAME COLUMN — may break dependent queries"
   category: database
+  test_block: "psql -c 'ALTER TABLE users RENAME COLUMN name TO full_name'"
+  test_allow: "psql -c 'ALTER TABLE users ADD COLUMN full_name TEXT'"
 
 # ── REVOKE / access control ────────────────────────────────────
 - name: sql-revoke-all
@@ -143,12 +187,16 @@
   severity: block
   message: "REVOKE ALL — removes all privileges"
   category: database
+  test_block: "psql -c 'REVOKE ALL ON DATABASE mydb FROM readonly'"
+  test_allow: "psql -c 'GRANT SELECT ON users TO readonly'"
 
 - name: sql-revoke-connect
   pattern: '(?i)\bREVOKE\s+CONNECT\b'
   severity: block
   message: "REVOKE CONNECT — locks users out of database"
   category: database
+  test_block: "psql -c 'REVOKE CONNECT ON DATABASE mydb FROM PUBLIC'"
+  test_allow: "psql -c 'GRANT CONNECT ON DATABASE mydb TO readonly'"
 
 # ── Dangerous admin commands ───────────────────────────────────
 - name: sql-reassign-owned
@@ -156,18 +204,24 @@
   severity: block
   message: "REASSIGN OWNED — transfers all objects to another role"
   category: database
+  test_block: "psql -c 'REASSIGN OWNED BY old_user TO new_user'"
+  test_allow: "psql -c 'SELECT * FROM pg_roles'"
 
 - name: sql-vacuum-full
   pattern: '(?i)\bVACUUM\s+FULL\b'
   severity: warn
   message: "VACUUM FULL — locks table exclusively, rewrites entire table"
   category: database
+  test_block: "psql -c 'VACUUM FULL users'"
+  test_allow: "psql -c 'VACUUM users'"
 
 - name: sql-cluster
   pattern: '(?i)\bCLUSTER\s+\w'
   severity: warn
   message: "CLUSTER — rewrites table data in index order, exclusive lock"
   category: database
+  test_block: "psql -c 'CLUSTER users USING users_pkey'"
+  test_allow: "psql -c 'SELECT * FROM users'"
 
 # ── PostgreSQL-specific ────────────────────────────────────────
 - name: pg-terminate-backend
@@ -175,12 +229,16 @@
   severity: block
   message: "pg_terminate_backend — kills a database connection"
   category: database
+  test_block: "psql -c 'SELECT pg_terminate_backend(12345)'"
+  test_allow: "psql -c 'SELECT * FROM pg_stat_activity'"
 
 - name: pg-cancel-backend
   pattern: '(?i)\bpg_cancel_backend\b'
   severity: warn
   message: "pg_cancel_backend — cancels a running query"
   category: database
+  test_block: "psql -c 'SELECT pg_cancel_backend(12345)'"
+  test_allow: "psql -c 'SELECT * FROM pg_stat_activity'"
 
 # ── MySQL-specific ─────────────────────────────────────────────
 - name: mysql-drop-database-cli
@@ -188,12 +246,16 @@
   severity: block
   message: "mysqladmin drop — drops database via CLI"
   category: database
+  test_block: "mysqladmin drop testdb"
+  test_allow: "mysqladmin status"
 
 - name: mysql-kill-query
   pattern: '(?i)\bKILL\s+(QUERY\s+)?\d'
   severity: warn
   message: "KILL — terminates a MySQL connection or query"
   category: database
+  test_block: "mysql -e 'KILL 42'"
+  test_allow: "mysql -e 'SELECT 1'"
 
 # ── CLI tools ──────────────────────────────────────────────────
 - name: psql-drop
@@ -201,24 +263,32 @@
   severity: block
   message: "psql with DROP — verify this is intentional"
   category: database
+  test_block: "psql -c 'DROP TABLE users'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: mysql-cli-drop
   pattern: '(?i)mysql\s+.*\bDROP\b'
   severity: block
   message: "mysql CLI with DROP — verify this is intentional"
   category: database
+  test_block: "mysql -e 'DROP TABLE users'"
+  test_allow: "mysql -e 'SELECT 1'"
 
 - name: sqlite-drop
   pattern: '(?i)sqlite3?\s+.*\bDROP\b'
   severity: block
   message: "sqlite with DROP — verify this is intentional"
   category: database
+  test_block: "sqlite3 test.db 'DROP TABLE users'"
+  test_allow: "sqlite3 test.db 'SELECT 1'"
 
 - name: sqlcmd-drop
   pattern: '(?i)sqlcmd\s+.*\bDROP\b'
   severity: block
   message: "sqlcmd with DROP — verify this is intentional (SQL Server)"
   category: database
+  test_block: "sqlcmd -Q 'DROP TABLE users'"
+  test_allow: "sqlcmd -Q 'SELECT 1'"
 
 # ── Migration tools (dangerous flags) ─────────────────────────
 - name: sqlx-database-drop
@@ -226,57 +296,77 @@
   severity: block
   message: "sqlx database drop — destroys entire database"
   category: database
+  test_block: "sqlx database drop"
+  test_allow: "sqlx database create"
 
 - name: diesel-database-drop
   pattern: '(?i)diesel\s+database\s+drop\b'
   severity: block
   message: "diesel database drop — destroys entire database"
   category: database
+  test_block: "diesel database drop"
+  test_allow: "diesel database setup"
 
 - name: prisma-db-push-force
   pattern: '(?i)prisma\s+db\s+push\s+.*--force-reset'
   severity: block
   message: "prisma db push --force-reset — drops all data and recreates"
   category: database
+  test_block: "prisma db push --force-reset"
+  test_allow: "prisma db push"
 
 - name: prisma-migrate-reset
   pattern: '(?i)prisma\s+migrate\s+reset\b'
   severity: block
   message: "prisma migrate reset — drops database and re-applies all migrations"
   category: database
+  test_block: "prisma migrate reset"
+  test_allow: "prisma migrate deploy"
 
 - name: liquibase-drop-all
   pattern: '(?i)liquibase\s+drop-all\b'
   severity: block
   message: "liquibase drop-all — drops all database objects"
   category: database
+  test_block: "liquibase drop-all"
+  test_allow: "liquibase update"
 
 - name: flyway-clean
   pattern: '(?i)flyway\s+clean\b'
   severity: block
   message: "flyway clean — drops all objects in configured schemas"
   category: database
+  test_block: "flyway clean"
+  test_allow: "flyway migrate"
 
 - name: knex-migrate-rollback-all
   pattern: '(?i)knex\s+migrate:rollback\s+--all'
   severity: block
   message: "knex migrate:rollback --all — rolls back all migrations"
   category: database
+  test_block: "knex migrate:rollback --all"
+  test_allow: "knex migrate:latest"
 
 - name: rails-db-drop
   pattern: '(?i)(rails|rake)\s+db:drop\b'
   severity: block
   message: "rails db:drop — destroys the database"
   category: database
+  test_block: "rails db:drop"
+  test_allow: "rails db:migrate"
 
 - name: rails-db-reset
   pattern: '(?i)(rails|rake)\s+db:reset\b'
   severity: block
   message: "rails db:reset — drops and recreates the database"
   category: database
+  test_block: "rails db:reset"
+  test_allow: "rails db:migrate"
 
 - name: django-flush
   pattern: '(?i)(python|django-admin)\s+.*\bflush\b'
   severity: block
   message: "django flush — deletes all data from all tables"
   category: database
+  test_block: "python manage.py flush"
+  test_allow: "python manage.py migrate"

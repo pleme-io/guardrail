@@ -5,33 +5,45 @@
   severity: warn
   message: "kill -9 sends SIGKILL — no graceful shutdown"
   category: process
+  test_block: "kill -9 1234"
+  test_allow: "kill -15 1234"
 
 - name: killall
   pattern: 'killall\s'
   severity: warn
   message: "killall sends signal to all processes matching name"
   category: process
+  test_block: "killall nginx"
+  test_allow: "kill -15 1234"
 
 - name: pkill-broad
   pattern: 'pkill\s+-9\s'
   severity: warn
   message: "pkill -9 sends SIGKILL to matching processes"
   category: process
+  test_block: "pkill -9 nginx"
+  test_allow: "pkill -15 nginx"
 
 - name: shutdown
   pattern: '\b(shutdown|poweroff|halt|reboot)\b'
   severity: block
   message: "System shutdown/reboot command"
   category: process
+  test_block: "shutdown -h now"
+  test_allow: "uptime"
 
 - name: systemctl-stop-critical
   pattern: 'systemctl\s+stop\s+(sshd|networking|docker|k3s|kubelet)'
   severity: block
   message: "Stopping critical system service"
   category: process
+  test_block: "systemctl stop docker"
+  test_allow: "systemctl status docker"
 
 - name: launchctl-unload
   pattern: 'launchctl\s+(unload|bootout)\s'
   severity: warn
   message: "macOS service unload"
   category: process
+  test_block: "launchctl unload /Library/LaunchDaemons/com.example.plist"
+  test_allow: "launchctl list"

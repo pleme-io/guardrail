@@ -6,12 +6,16 @@
   severity: block
   message: "Redis FLUSHALL deletes all keys in all databases"
   category: nosql
+  test_block: "redis-cli FLUSHALL"
+  test_allow: "redis-server --port 6380"
 
 - name: redis-flushdb
   pattern: '(?i)FLUSHDB'
   severity: block
   message: "Redis FLUSHDB deletes all keys in current database"
   category: nosql
+  test_block: "redis-cli FLUSHDB"
+  test_allow: "redis-cli GET mykey"
 
 # ── MongoDB ────────────────────────────────────────────────────
 - name: mongo-drop-database
@@ -19,18 +23,24 @@
   severity: block
   message: "MongoDB dropDatabase"
   category: nosql
+  test_block: "mongosh --eval 'db.dropDatabase()'"
+  test_allow: "mongosh --eval 'db.stats()'"
 
 - name: mongo-drop-collection
   pattern: '(?i)db\.\w+\.drop\(\)'
   severity: block
   message: "MongoDB collection drop"
   category: nosql
+  test_block: "mongosh --eval 'db.users.drop()'"
+  test_allow: "mongosh --eval 'db.users.find()'"
 
 - name: mongosh-drop
   pattern: '(?i)(mongosh?|mongo)\s+.*--eval.*drop'
   severity: warn
   message: "MongoDB shell eval with drop"
   category: nosql
+  test_block: "mongosh --eval 'db.users.drop()'"
+  test_allow: "mongosh --eval 'db.stats()'"
 
 # ── Elasticsearch ──────────────────────────────────────────────
 - name: es-delete-index
@@ -38,12 +48,16 @@
   severity: block
   message: "Elasticsearch index deletion via curl"
   category: nosql
+  test_block: "curl -X DELETE http://localhost:9200/my-index"
+  test_allow: "curl -X GET http://localhost:9200/my-index"
 
 - name: es-delete-all
   pattern: 'curl\s+.*DELETE.*/_all'
   severity: block
   message: "Elasticsearch delete all indices"
   category: nosql
+  test_block: "curl -X DELETE http://localhost:9200/_all"
+  test_allow: "curl http://localhost:9200/_cat/indices"
 
 # ── Cassandra ──────────────────────────────────────────────────
 - name: cassandra-drop-keyspace
@@ -51,3 +65,5 @@
   severity: block
   message: "Cassandra DROP KEYSPACE"
   category: nosql
+  test_block: "echo 'DROP KEYSPACE mykeyspace'"
+  test_allow: "echo 'DESCRIBE KEYSPACES'"

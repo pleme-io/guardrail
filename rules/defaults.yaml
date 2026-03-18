@@ -7,36 +7,48 @@
   severity: block
   message: "Recursive force-delete from root"
   category: filesystem
+  test_block: "rm -rf /"
+  test_allow: "rm -rf ./target"
 
 - name: rm-rf-home
   pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(~|\$HOME)\s*$'
   severity: block
   message: "Recursive force-delete of home directory"
   category: filesystem
+  test_block: "rm -rf ~"
+  test_allow: "rm file.txt"
 
 - name: rm-rf-cwd
   pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+\.\s*$'
   severity: block
   message: "Recursive force-delete of current directory"
   category: filesystem
+  test_block: "rm -rf ."
+  test_allow: "rm -rf ./target"
 
 - name: dd-disk-overwrite
   pattern: 'dd\s+.*of=/dev/(sd|nvme|disk|vd)'
   severity: block
   message: "Direct disk device overwrite"
   category: filesystem
+  test_block: "dd if=/dev/zero of=/dev/sda bs=1M"
+  test_allow: "dd if=input.img of=output.img"
 
 - name: mkfs-format
   pattern: '(?:^|\s)mkfs\.\w+'
   severity: block
   message: "Filesystem format command"
   category: filesystem
+  test_block: "mkfs.ext4 /dev/sda1"
+  test_allow: "ls /dev/sda1"
 
 - name: chmod-777-recursive
   pattern: 'chmod\s+-[a-zA-Z]*R[a-zA-Z]*\s+777\s+/'
   severity: block
   message: "Recursive chmod 777 from root"
   category: filesystem
+  test_block: "chmod -R 777 /etc"
+  test_allow: "chmod 755 file.txt"
 
 # ── Git ────────────────────────────────────────────────────────
 - name: git-force-push-main
@@ -44,30 +56,40 @@
   severity: block
   message: "Force push to main/master"
   category: git
+  test_block: "git push --force origin main"
+  test_allow: "git push origin main"
 
 - name: git-force-push-bare
   pattern: 'git\s+push\s+--force[a-z-]*\s*$'
   severity: block
   message: "Force push without explicit branch"
   category: git
+  test_block: "git push --force"
+  test_allow: "git push origin feature"
 
 - name: git-reset-hard
   pattern: 'git\s+reset\s+--hard'
   severity: warn
   message: "git reset --hard discards uncommitted changes"
   category: git
+  test_block: "git reset --hard HEAD~1"
+  test_allow: "git reset --soft HEAD~1"
 
 - name: git-clean-force
   pattern: 'git\s+clean\s+-[a-zA-Z]*f'
   severity: warn
   message: "git clean -f deletes untracked files permanently"
   category: git
+  test_block: "git clean -fd"
+  test_allow: "git status"
 
 - name: git-branch-force-delete
   pattern: 'git\s+branch\s+-D\s'
   severity: warn
   message: "git branch -D force-deletes without merge check"
   category: git
+  test_block: "git branch -D old-branch"
+  test_allow: "git branch -d merged"
 
 # ── Database (core — see rules.d/sql.yaml for comprehensive coverage) ─
 - name: sql-drop-table
@@ -75,30 +97,40 @@
   severity: block
   message: "DROP TABLE — use migrations instead"
   category: database
+  test_block: "psql -c 'DROP TABLE users'"
+  test_allow: "psql -c 'SELECT * FROM users'"
 
 - name: sql-drop-database
   pattern: '(?i)\bDROP\s+DATABASE\b'
   severity: block
   message: "DROP DATABASE — catastrophic data loss"
   category: database
+  test_block: "psql -c 'DROP DATABASE mydb'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: sql-drop-schema
   pattern: '(?i)\bDROP\s+SCHEMA\b'
   severity: block
   message: "DROP SCHEMA"
   category: database
+  test_block: "mysql -e 'DROP SCHEMA test'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: sql-truncate
   pattern: '(?i)\bTRUNCATE\s+(TABLE\s+)?\w'
   severity: block
   message: "TRUNCATE — irreversible data deletion"
   category: database
+  test_block: "psql -c 'TRUNCATE TABLE logs'"
+  test_allow: "psql -c 'SELECT 1'"
 
 - name: sql-delete-no-where
   pattern: '(?i)\bDELETE\s+FROM\s+\w+\s*[;''")\s]*$'
   severity: block
   message: "DELETE FROM without WHERE — deletes all rows"
   category: database
+  test_block: "psql -c 'DELETE FROM users'"
+  test_allow: "psql -c 'DELETE FROM users WHERE id = 5'"
 
 # ── Kubernetes ─────────────────────────────────────────────────
 - name: kubectl-delete-namespace
@@ -106,18 +138,24 @@
   severity: block
   message: "Deleting a Kubernetes namespace destroys all resources in it"
   category: kubernetes
+  test_block: "kubectl delete namespace production"
+  test_allow: "kubectl get pods"
 
 - name: kubectl-delete-all
   pattern: 'kubectl\s+delete\s+\S+\s+--all\b'
   severity: block
   message: "kubectl delete --all — mass resource deletion"
   category: kubernetes
+  test_block: "kubectl delete pods --all"
+  test_allow: "kubectl get pods"
 
 - name: helm-uninstall-prod
   pattern: 'helm\s+uninstall\s+.*-n\s+(prod|production)\b'
   severity: block
   message: "Helm uninstall in production namespace"
   category: kubernetes
+  test_block: "helm uninstall myapp -n production"
+  test_allow: "helm list"
 
 # ── Nix ────────────────────────────────────────────────────────
 - name: nix-gc-delete-old
@@ -125,12 +163,16 @@
   severity: warn
   message: "Deletes all old Nix generations — cannot rollback"
   category: nix
+  test_block: "nix-collect-garbage -d"
+  test_allow: "nix build .#default"
 
 - name: nix-store-gc
   pattern: 'nix\s+store\s+gc'
   severity: warn
   message: "Nix store garbage collection"
   category: nix
+  test_block: "nix store gc"
+  test_allow: "nix build .#default"
 
 # ── Docker ─────────────────────────────────────────────────────
 - name: docker-system-prune
@@ -138,12 +180,16 @@
   severity: warn
   message: "Docker system prune removes all unused images, containers, networks"
   category: docker
+  test_block: "docker system prune -af"
+  test_allow: "docker ps"
 
 - name: docker-volume-prune
   pattern: 'docker\s+volume\s+prune'
   severity: warn
   message: "Docker volume prune destroys persistent data"
   category: docker
+  test_block: "docker volume prune -f"
+  test_allow: "docker volume ls"
 
 # ── Secrets ────────────────────────────────────────────────────
 - name: sops-decrypt-pipe
@@ -151,12 +197,16 @@
   severity: warn
   message: "Decrypting secrets and piping output — verify destination"
   category: secrets
+  test_block: "sops -d secrets.yaml | cat"
+  test_allow: "sops -d secrets.yaml"
 
 - name: env-secret-echo
   pattern: 'echo\s+.*\$(GITHUB_TOKEN|AWS_SECRET|DATABASE_URL|API_KEY|PRIVATE_KEY)'
   severity: warn
   message: "Echoing secret environment variable"
   category: secrets
+  test_block: "echo $GITHUB_TOKEN"
+  test_allow: "echo hello world"
 
 # ── Terraform / IaC ───────────────────────────────────────────
 - name: terraform-destroy
@@ -164,54 +214,72 @@
   severity: block
   message: "terraform destroy tears down all managed infrastructure"
   category: terraform
+  test_block: "terraform destroy"
+  test_allow: "terraform plan"
 
 - name: terraform-apply-auto
   pattern: 'terraform\s+apply\s+.*-auto-approve'
   severity: warn
   message: "terraform apply -auto-approve skips confirmation"
   category: terraform
+  test_block: "terraform apply -auto-approve"
+  test_allow: "terraform apply"
 
 - name: terraform-force-unlock
   pattern: 'terraform\s+force-unlock'
   severity: block
   message: "terraform force-unlock can corrupt state"
   category: terraform
+  test_block: "terraform force-unlock abc123"
+  test_allow: "terraform plan"
 
 - name: terraform-state-rm
   pattern: 'terraform\s+state\s+rm\b'
   severity: block
   message: "terraform state rm removes resources from state without destroying them"
   category: terraform
+  test_block: "terraform state rm aws_instance.web"
+  test_allow: "terraform state list"
 
 - name: terraform-taint
   pattern: 'terraform\s+taint\b'
   severity: warn
   message: "terraform taint marks resource for destruction on next apply"
   category: terraform
+  test_block: "terraform taint aws_instance.web"
+  test_allow: "terraform plan"
 
 - name: pulumi-destroy
   pattern: 'pulumi\s+destroy'
   severity: block
   message: "pulumi destroy tears down all managed infrastructure"
   category: terraform
+  test_block: "pulumi destroy"
+  test_allow: "pulumi up"
 
 - name: pulumi-cancel
   pattern: 'pulumi\s+cancel'
   severity: block
   message: "pulumi cancel can corrupt deployment state"
   category: terraform
+  test_block: "pulumi cancel"
+  test_allow: "pulumi up"
 
 - name: ansible-playbook-prod
   pattern: 'ansible-playbook\s+.*(-l|--limit)\s+(prod|production)\b'
   severity: warn
   message: "ansible-playbook targeting production — verify intent"
   category: terraform
+  test_block: "ansible-playbook site.yml -l production"
+  test_allow: "ansible-playbook site.yml -l staging"
 
 - name: crossplane-delete-claim
   pattern: 'kubectl\s+delete\s+(claim|composite)'
   severity: warn
   message: "Deleting Crossplane claim destroys managed cloud resources"
   category: terraform
+  test_block: "kubectl delete claim my-db"
+  test_allow: "kubectl get claims"
 
 # ── Cloud CLI — see rules.d/ suites for comprehensive coverage ──
 # Cloud rules (aws.yaml, gcp.yaml, azure.yaml) are deployed as plugin
@@ -224,21 +292,29 @@
   severity: block
   message: "flux uninstall removes the entire GitOps controller"
   category: flux
+  test_block: "flux uninstall"
+  test_allow: "flux get kustomizations"
 
 - name: flux-delete-source
   pattern: 'flux\s+delete\s+source'
   severity: warn
   message: "Deleting Flux source disconnects GitOps reconciliation"
   category: flux
+  test_block: "flux delete source git my-repo"
+  test_allow: "flux get sources git"
 
 - name: flux-delete-kustomization
   pattern: 'flux\s+delete\s+kustomization'
   severity: warn
   message: "Deleting Flux kustomization stops reconciliation of managed resources"
   category: flux
+  test_block: "flux delete kustomization my-app"
+  test_allow: "flux get kustomizations"
 
 - name: flux-suspend-all
   pattern: 'flux\s+suspend\s+.*--all'
   severity: warn
   message: "Suspending all Flux reconciliation"
   category: flux
+  test_block: "flux suspend kustomization --all"
+  test_allow: "flux get kustomizations"
