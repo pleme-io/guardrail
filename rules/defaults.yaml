@@ -69,7 +69,7 @@
   message: "git branch -D force-deletes without merge check"
   category: git
 
-# ── Database ───────────────────────────────────────────────────
+# ── Database (core — see rules.d/sql.yaml for comprehensive coverage) ─
 - name: sql-drop-table
   pattern: '(?i)\bDROP\s+TABLE\b'
   severity: block

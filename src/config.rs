@@ -441,6 +441,14 @@ mod tests {
     }
 
     #[test]
+    fn sql_suite_parses() {
+        let yaml = include_str!("../rules/sql.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 35, "expected 35+ sql rules, got {}", rules.len());
+        assert!(rules.iter().all(|r| r.category == Category::Database));
+    }
+
+    #[test]
     fn all_suites_have_unique_rule_names() {
         let mut all_names = std::collections::BTreeSet::new();
         let mut dupes = vec![];
@@ -453,6 +461,7 @@ mod tests {
             include_str!("../rules/process.yaml"),
             include_str!("../rules/network.yaml"),
             include_str!("../rules/nosql.yaml"),
+            include_str!("../rules/sql.yaml"),
         ] {
             let rules: Vec<Rule> = serde_yaml::from_str(yaml_str).unwrap();
             for rule in rules {
