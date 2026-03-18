@@ -62,10 +62,12 @@ fn build_prefix_set() -> HashSet<&'static str> {
 /// Returns false (not dangerous) for 99%+ of commands.
 #[must_use]
 pub fn fast_reject(command: &str, prefixes: &HashSet<&str>) -> bool {
-    let first_word = command.split_whitespace().next().unwrap_or("");
-    // Exact match or prefix match (for mkfs.ext4, nix-collect-garbage, etc.)
-    if prefixes.contains(first_word) || prefixes.iter().any(|p| first_word.starts_with(p)) {
-        return false; // might be dangerous, don't reject
+    // Check first two words (handles `sudo rm`, `env VAR=x rm`, etc.)
+    let words: Vec<&str> = command.split_whitespace().take(3).collect();
+    for word in &words {
+        if prefixes.contains(word) || prefixes.iter().any(|p| word.starts_with(p)) {
+            return false; // might be dangerous, don't reject
+        }
     }
     // Check for SQL keywords that appear mid-command (echo "DROP TABLE" | psql)
     let cmd_upper = command.to_uppercase();
@@ -76,6 +78,20 @@ pub fn fast_reject(command: &str, prefixes: &HashSet<&str>) -> bool {
         return false; // might be dangerous
     }
     true // safe — skip DFA
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Command normalization — strip nix store path noise
+// ═══════════════════════════════════════════════════════════════════
+
+/// Normalize a command by replacing nix store paths with just the binary name.
+/// `/nix/store/abc123-pkg-1.0/bin/cmd args` → `cmd args`
+/// This prevents false positives from package names in store paths.
+#[must_use]
+pub fn normalize_command(command: &str) -> String {
+    // Replace /nix/store/{hash}-{name}/bin/{binary} with just {binary}
+    let re = regex::Regex::new(r"/nix/store/[a-z0-9]+-[^/]+/bin/").unwrap();
+    re.replace_all(command, "").to_string()
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -112,13 +128,14 @@ impl RegexEngine {
 
 impl RuleEngine for RegexEngine {
     fn check(&self, command: &str) -> Decision {
+        // Normalize first (strip nix store paths)
+        let normalized = normalize_command(command);
+
         // Tier 3: fast reject — skip DFA for safe commands
-        if fast_reject(command, &self.prefixes) {
+        if fast_reject(&normalized, &self.prefixes) {
             return Decision::Allow;
         }
-
-        // Full DFA match
-        let matches: Vec<usize> = self.set.matches(command).into_iter().collect();
+        let matches: Vec<usize> = self.set.matches(&normalized).into_iter().collect();
 
         if matches.is_empty() {
             return Decision::Allow;
@@ -194,6 +211,53 @@ mod tests {
             Decision::Allow => {}
             other => panic!("expected Allow for '{cmd}', got {other:?}"),
         }
+    }
+
+    // ── Nix store path normalization ─────────────────────────────
+
+    #[test]
+    fn normalize_strips_nix_store_path() {
+        assert_eq!(
+            normalize_command("/nix/store/abc123-pkg-1.0/bin/guardrail check"),
+            "guardrail check"
+        );
+    }
+
+    #[test]
+    fn normalize_strips_multiple_store_paths() {
+        assert_eq!(
+            normalize_command("/nix/store/abc-foo-1.0/bin/cmd1 && /nix/store/def-bar-2.0/bin/cmd2"),
+            "cmd1 && cmd2"
+        );
+    }
+
+    #[test]
+    fn normalize_preserves_normal_commands() {
+        assert_eq!(normalize_command("ls -la"), "ls -la");
+        assert_eq!(normalize_command("cargo test"), "cargo test");
+    }
+
+    #[test]
+    fn nix_shell_wrapped_mkfs_not_blocked() {
+        // nix shell wraps commands with store paths — mkfs in a package name shouldn't trigger
+        let cmd = "/nix/store/abc123-e2fsprogs-1.47/bin/crate2nix generate";
+        let e = engine();
+        match e.check(cmd) {
+            Decision::Allow => {}
+            other => panic!("nix store path should not trigger: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn actual_mkfs_still_blocked() {
+        assert_blocks("mkfs.ext4 /dev/sda1");
+        assert_blocks("sudo mkfs.ext4 /dev/sda1");
+    }
+
+    #[test]
+    fn nix_store_path_with_real_danger() {
+        // Even through a nix store path, if the binary IS dangerous, block it
+        assert_blocks("/nix/store/abc123-coreutils-9.0/bin/rm -rf /");
     }
 
     // ── Fast reject ─────────────────────────────────────────────
