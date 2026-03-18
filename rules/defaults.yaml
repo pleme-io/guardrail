@@ -1,0 +1,159 @@
+# Compiled-in default rules — embedded via include_str!
+# These ship with the binary. No config file needed for basic protection.
+
+# ── Filesystem ─────────────────────────────────────────────────
+- name: rm-rf-root
+  pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+/\s*$'
+  severity: block
+  message: "Recursive force-delete from root"
+  category: filesystem
+
+- name: rm-rf-home
+  pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(~|\$HOME)\s*$'
+  severity: block
+  message: "Recursive force-delete of home directory"
+  category: filesystem
+
+- name: rm-rf-cwd
+  pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+\.\s*$'
+  severity: block
+  message: "Recursive force-delete of current directory"
+  category: filesystem
+
+- name: dd-disk-overwrite
+  pattern: 'dd\s+.*of=/dev/(sd|nvme|disk|vd)'
+  severity: block
+  message: "Direct disk device overwrite"
+  category: filesystem
+
+- name: mkfs-format
+  pattern: 'mkfs\.\w+'
+  severity: block
+  message: "Filesystem format command"
+  category: filesystem
+
+- name: chmod-777-recursive
+  pattern: 'chmod\s+-[a-zA-Z]*R[a-zA-Z]*\s+777\s+/'
+  severity: block
+  message: "Recursive chmod 777 from root"
+  category: filesystem
+
+# ── Git ────────────────────────────────────────────────────────
+- name: git-force-push-main
+  pattern: 'git\s+push\s+.*--force[a-z-]*\s+\S+\s+(main|master)\b'
+  severity: block
+  message: "Force push to main/master"
+  category: git
+
+- name: git-force-push-bare
+  pattern: 'git\s+push\s+--force[a-z-]*\s*$'
+  severity: block
+  message: "Force push without explicit branch"
+  category: git
+
+- name: git-reset-hard
+  pattern: 'git\s+reset\s+--hard'
+  severity: warn
+  message: "git reset --hard discards uncommitted changes"
+  category: git
+
+- name: git-clean-force
+  pattern: 'git\s+clean\s+-[a-zA-Z]*f'
+  severity: warn
+  message: "git clean -f deletes untracked files permanently"
+  category: git
+
+- name: git-branch-force-delete
+  pattern: 'git\s+branch\s+-D\s'
+  severity: warn
+  message: "git branch -D force-deletes without merge check"
+  category: git
+
+# ── Database ───────────────────────────────────────────────────
+- name: sql-drop-table
+  pattern: '(?i)\bDROP\s+TABLE\b'
+  severity: block
+  message: "DROP TABLE — use migrations instead"
+  category: database
+
+- name: sql-drop-database
+  pattern: '(?i)\bDROP\s+DATABASE\b'
+  severity: block
+  message: "DROP DATABASE — catastrophic data loss"
+  category: database
+
+- name: sql-drop-schema
+  pattern: '(?i)\bDROP\s+SCHEMA\b'
+  severity: block
+  message: "DROP SCHEMA"
+  category: database
+
+- name: sql-truncate
+  pattern: '(?i)\bTRUNCATE\s+(TABLE\s+)?\w'
+  severity: block
+  message: "TRUNCATE — irreversible data deletion"
+  category: database
+
+- name: sql-delete-no-where
+  pattern: '(?i)\bDELETE\s+FROM\s+\w+\s*[;''")\s]*$'
+  severity: block
+  message: "DELETE FROM without WHERE — deletes all rows"
+  category: database
+
+# ── Kubernetes ─────────────────────────────────────────────────
+- name: kubectl-delete-namespace
+  pattern: 'kubectl\s+delete\s+(ns|namespace)\s'
+  severity: block
+  message: "Deleting a Kubernetes namespace destroys all resources in it"
+  category: kubernetes
+
+- name: kubectl-delete-all
+  pattern: 'kubectl\s+delete\s+\S+\s+--all\b'
+  severity: block
+  message: "kubectl delete --all — mass resource deletion"
+  category: kubernetes
+
+- name: helm-uninstall-prod
+  pattern: 'helm\s+uninstall\s+.*-n\s+(prod|production)\b'
+  severity: block
+  message: "Helm uninstall in production namespace"
+  category: kubernetes
+
+# ── Nix ────────────────────────────────────────────────────────
+- name: nix-gc-delete-old
+  pattern: 'nix-collect-garbage\s+-d'
+  severity: warn
+  message: "Deletes all old Nix generations — cannot rollback"
+  category: nix
+
+- name: nix-store-gc
+  pattern: 'nix\s+store\s+gc'
+  severity: warn
+  message: "Nix store garbage collection"
+  category: nix
+
+# ── Docker ─────────────────────────────────────────────────────
+- name: docker-system-prune
+  pattern: 'docker\s+system\s+prune'
+  severity: warn
+  message: "Docker system prune removes all unused images, containers, networks"
+  category: docker
+
+- name: docker-volume-prune
+  pattern: 'docker\s+volume\s+prune'
+  severity: warn
+  message: "Docker volume prune destroys persistent data"
+  category: docker
+
+# ── Secrets ────────────────────────────────────────────────────
+- name: sops-decrypt-pipe
+  pattern: 'sops\s+(-d|--decrypt)\s+.*\|'
+  severity: warn
+  message: "Decrypting secrets and piping output — verify destination"
+  category: secrets
+
+- name: env-secret-echo
+  pattern: 'echo\s+.*\$(GITHUB_TOKEN|AWS_SECRET|DATABASE_URL|API_KEY|PRIVATE_KEY)'
+  severity: warn
+  message: "Echoing secret environment variable"
+  category: secrets
