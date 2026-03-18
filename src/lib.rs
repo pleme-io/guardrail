@@ -3,6 +3,7 @@ pub mod config;
 pub mod engine;
 pub mod hook;
 pub mod model;
+pub mod testing;
 
 pub use cache::{CacheStore, CompiledCache, Fingerprinter, FsCache, FsFingerprinter};
 pub use cache::{FixedFingerprinter, MemCache};
