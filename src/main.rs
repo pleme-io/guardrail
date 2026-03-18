@@ -94,14 +94,31 @@ fn resolve_all_rules() -> Result<Vec<Rule>> {
     config::resolve(&providers, &user_config).context("resolving rules")
 }
 
-/// Build engine: try cache first, fall back to full resolution.
+/// Build engine: try cache, auto-compile if stale, always fast.
 fn build_engine() -> Result<RegexEngine> {
     let rules = if let Some(cached) = load_cached_rules() {
         cached
     } else {
-        resolve_all_rules()?
+        // Cache miss — resolve and compile for next time
+        let resolved = resolve_all_rules()?;
+        let _ = write_cache(&resolved); // best-effort, don't fail check
+        resolved
     };
     RegexEngine::new(rules).context("compiling RegexSet")
+}
+
+/// Write rules to cache file.
+fn write_cache(rules: &[Rule]) -> Result<()> {
+    let cache = CompiledCache {
+        fingerprint: rules_fingerprint(),
+        rules: rules.to_vec(),
+    };
+    let path = cache_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, serde_json::to_vec(&cache)?)?;
+    Ok(())
 }
 
 fn main() -> Result<()> {
