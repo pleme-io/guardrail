@@ -1,12 +1,12 @@
-use std::path::PathBuf;
 use std::process;
-use std::{fs, io};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
+use guardrail::cache::{self, CacheStore, FsCache, FsFingerprinter, Fingerprinter};
+use guardrail::config::{self, DefaultsProvider, DirectoryProvider, RuleProvider};
 use guardrail::model::{Decision, Rule};
-use guardrail::{config, engine::RegexEngine, hook, RuleEngine};
+use guardrail::{engine::RegexEngine, hook, RuleEngine};
 
 #[derive(Parser)]
 #[command(name = "guardrail", about = "Defensive guardrails for AI coding agents")]
@@ -19,7 +19,7 @@ struct Cli {
 enum Command {
     /// Check a command from Claude Code hook JSON on stdin.
     Check,
-    /// Pre-compile rules to a cached binary for fast loading.
+    /// Pre-compile rules to cache for fast loading.
     Compile,
     /// Validate the guardrail config file.
     Validate,
@@ -27,103 +27,33 @@ enum Command {
     List,
 }
 
-/// Cache file path: ~/.cache/guardrail/compiled.json
-fn cache_path() -> PathBuf {
-    let cache_dir = std::env::var("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache")
-        })
-        .join("guardrail");
-    cache_dir.join("compiled.json")
+fn fs_cache() -> FsCache {
+    FsCache { path: FsCache::default_path() }
 }
 
-/// Compute a freshness fingerprint from rules.d/ mtimes + config mtime.
-fn rules_fingerprint() -> u64 {
-    let mut hash: u64 = 0;
-    let paths = [config::config_path()];
-    for path in &paths {
-        if let Ok(meta) = fs::metadata(path) {
-            if let Ok(mtime) = meta.modified() {
-                hash ^= mtime.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos() as u64;
-            }
-        }
-    }
-    let rules_dir = config::rules_dir();
-    if let Ok(entries) = fs::read_dir(&rules_dir) {
-        for entry in entries.flatten() {
-            if let Ok(meta) = entry.metadata() {
-                if let Ok(mtime) = meta.modified() {
-                    hash ^= mtime.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos() as u64;
-                }
-            }
-        }
-    }
-    hash
-}
-
-/// Cached compiled rules format.
-#[derive(serde::Serialize, serde::Deserialize)]
-struct CompiledCache {
-    fingerprint: u64,
-    rules: Vec<Rule>,
-}
-
-/// Try to load rules from cache. Returns None if cache is stale or missing.
-fn load_cached_rules() -> Option<Vec<Rule>> {
-    let path = cache_path();
-    let content = fs::read(&path).ok()?;
-    let cache: CompiledCache = serde_json::from_slice(&content).ok()?;
-    if cache.fingerprint == rules_fingerprint() {
-        Some(cache.rules)
-    } else {
-        None
+fn fs_fingerprinter() -> FsFingerprinter {
+    FsFingerprinter {
+        config_path: config::config_path(),
+        rules_dir: config::rules_dir(),
     }
 }
 
-/// Resolve rules from all providers (full path — YAML parsing).
 fn resolve_all_rules() -> Result<Vec<Rule>> {
-    use guardrail::config::{DefaultsProvider, DirectoryProvider, RuleProvider};
-
     let defaults = DefaultsProvider;
     let rules_d = DirectoryProvider { dir: config::rules_dir() };
     let user_config = config::load_user_config(&config::config_path())
         .context("loading guardrail config")?;
-
     let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
     config::resolve(&providers, &user_config).context("resolving rules")
 }
 
-/// Build engine: try cache, auto-compile if stale, always fast.
 fn build_engine() -> Result<RegexEngine> {
-    let rules = if let Some(cached) = load_cached_rules() {
-        cached
-    } else {
-        // Cache miss — resolve and compile for next time
-        let resolved = resolve_all_rules()?;
-        let _ = write_cache(&resolved); // best-effort, don't fail check
-        resolved
-    };
+    let rules = cache::resolve_cached(&fs_cache(), &fs_fingerprinter(), resolve_all_rules)?;
     RegexEngine::new(rules).context("compiling RegexSet")
-}
-
-/// Write rules to cache file.
-fn write_cache(rules: &[Rule]) -> Result<()> {
-    let cache = CompiledCache {
-        fingerprint: rules_fingerprint(),
-        rules: rules.to_vec(),
-    };
-    let path = cache_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&path, serde_json::to_vec(&cache)?)?;
-    Ok(())
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-
     match cli.command {
         Command::Check => cmd_check(),
         Command::Compile => cmd_compile(),
@@ -153,7 +83,6 @@ fn cmd_check() -> Result<()> {
             eprintln!("guardrail [{rule}]: {message}");
         }
     }
-
     Ok(())
 }
 
@@ -161,25 +90,13 @@ fn cmd_compile() -> Result<()> {
     let rules = resolve_all_rules()?;
     let engine = RegexEngine::new(rules.clone()).context("compiling RegexSet")?;
 
-    let cache = CompiledCache {
-        fingerprint: rules_fingerprint(),
+    let store = fs_cache();
+    store.save(&cache::CompiledCache {
+        fingerprint: fs_fingerprinter().fingerprint(),
         rules,
-    };
+    })?;
 
-    let path = cache_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let json = serde_json::to_vec(&cache)?;
-    fs::write(&path, &json)?;
-
-    eprintln!(
-        "guardrail: compiled {} rules → {} ({} bytes)",
-        engine.rule_count(),
-        path.display(),
-        json.len()
-    );
-
+    eprintln!("guardrail: compiled {} rules → {}", engine.rule_count(), store.path.display());
     Ok(())
 }
 
@@ -197,14 +114,13 @@ fn cmd_validate() -> Result<()> {
 
 fn cmd_list() -> Result<()> {
     let engine = build_engine()?;
-    let rules = engine.rules();
-    for rule in &rules {
+    for rule in &engine.rules() {
         let sev = match rule.severity {
             guardrail::Severity::Block => "BLOCK",
             guardrail::Severity::Warn => "WARN ",
         };
         eprintln!("[{sev}] {:<30} {:?}  {}", rule.name, rule.category, rule.message);
     }
-    eprintln!("\n{} rules active", rules.len());
+    eprintln!("\n{} rules active", engine.rule_count());
     Ok(())
 }
