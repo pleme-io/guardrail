@@ -18,6 +18,9 @@ pub enum Category {
     Nix,
     Docker,
     Secrets,
+    Terraform,
+    Cloud,
+    Flux,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

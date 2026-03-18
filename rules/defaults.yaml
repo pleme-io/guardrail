@@ -157,3 +157,138 @@
   severity: warn
   message: "Echoing secret environment variable"
   category: secrets
+
+# ── Terraform / IaC ───────────────────────────────────────────
+- name: terraform-destroy
+  pattern: 'terraform\s+destroy'
+  severity: block
+  message: "terraform destroy tears down all managed infrastructure"
+  category: terraform
+
+- name: terraform-apply-auto
+  pattern: 'terraform\s+apply\s+.*-auto-approve'
+  severity: warn
+  message: "terraform apply -auto-approve skips confirmation"
+  category: terraform
+
+- name: terraform-force-unlock
+  pattern: 'terraform\s+force-unlock'
+  severity: block
+  message: "terraform force-unlock can corrupt state"
+  category: terraform
+
+- name: terraform-state-rm
+  pattern: 'terraform\s+state\s+rm\b'
+  severity: block
+  message: "terraform state rm removes resources from state without destroying them"
+  category: terraform
+
+- name: terraform-taint
+  pattern: 'terraform\s+taint\b'
+  severity: warn
+  message: "terraform taint marks resource for destruction on next apply"
+  category: terraform
+
+- name: pulumi-destroy
+  pattern: 'pulumi\s+destroy'
+  severity: block
+  message: "pulumi destroy tears down all managed infrastructure"
+  category: terraform
+
+- name: pulumi-cancel
+  pattern: 'pulumi\s+cancel'
+  severity: block
+  message: "pulumi cancel can corrupt deployment state"
+  category: terraform
+
+- name: ansible-playbook-prod
+  pattern: 'ansible-playbook\s+.*(-l|--limit)\s+(prod|production)\b'
+  severity: warn
+  message: "ansible-playbook targeting production — verify intent"
+  category: terraform
+
+- name: crossplane-delete-claim
+  pattern: 'kubectl\s+delete\s+(claim|composite)'
+  severity: warn
+  message: "Deleting Crossplane claim destroys managed cloud resources"
+  category: terraform
+
+# ── Cloud CLI ─────────────────────────────────────────────────
+- name: aws-ec2-terminate
+  pattern: 'aws\s+ec2\s+terminate-instances'
+  severity: block
+  message: "AWS EC2 instance termination"
+  category: cloud
+
+- name: aws-s3-rb
+  pattern: 'aws\s+s3\s+rb\s+.*--force'
+  severity: block
+  message: "AWS S3 force-remove bucket (deletes all objects + bucket)"
+  category: cloud
+
+- name: aws-s3-rm-recursive
+  pattern: 'aws\s+s3\s+rm\s+.*--recursive'
+  severity: warn
+  message: "AWS S3 recursive delete"
+  category: cloud
+
+- name: aws-rds-delete
+  pattern: 'aws\s+rds\s+delete-db-(instance|cluster)'
+  severity: block
+  message: "AWS RDS database deletion"
+  category: cloud
+
+- name: aws-iam-delete
+  pattern: 'aws\s+iam\s+delete-(role|user|policy)'
+  severity: warn
+  message: "AWS IAM deletion — may break access"
+  category: cloud
+
+- name: gcloud-compute-delete
+  pattern: 'gcloud\s+compute\s+instances\s+delete'
+  severity: block
+  message: "GCP compute instance deletion"
+  category: cloud
+
+- name: gcloud-sql-delete
+  pattern: 'gcloud\s+sql\s+instances\s+delete'
+  severity: block
+  message: "GCP Cloud SQL instance deletion"
+  category: cloud
+
+- name: az-vm-delete
+  pattern: 'az\s+vm\s+delete'
+  severity: block
+  message: "Azure VM deletion"
+  category: cloud
+
+- name: az-group-delete
+  pattern: 'az\s+group\s+delete'
+  severity: block
+  message: "Azure resource group deletion — destroys all resources in group"
+  category: cloud
+
+# ── FluxCD / GitOps ───────────────────────────────────────────
+- name: flux-uninstall
+  pattern: 'flux\s+uninstall'
+  severity: block
+  message: "flux uninstall removes the entire GitOps controller"
+  category: flux
+
+- name: flux-delete-source
+  pattern: 'flux\s+delete\s+source'
+  severity: warn
+  message: "Deleting Flux source disconnects GitOps reconciliation"
+  category: flux
+
+- name: flux-delete-kustomization
+  pattern: 'flux\s+delete\s+kustomization'
+  severity: warn
+  message: "Deleting Flux kustomization stops reconciliation of managed resources"
+  category: flux
+
+- name: flux-suspend-all
+  pattern: 'flux\s+suspend\s+.*--all'
+  severity: warn
+  message: "Suspending all Flux reconciliation"
+  category: flux

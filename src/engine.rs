@@ -164,12 +164,45 @@ mod tests {
     #[test] fn echo_token_warned()           { assert_warns("echo $GITHUB_TOKEN"); }
     #[test] fn echo_normal_allowed()         { assert_allows("echo hello world"); }
 
+    // ── Terraform / IaC ────────────────────────────────────────
+
+    #[test] fn terraform_destroy_blocked()      { assert_blocks("terraform destroy"); }
+    #[test] fn terraform_apply_auto_warned()    { assert_warns("terraform apply -auto-approve"); }
+    #[test] fn terraform_plan_allowed()         { assert_allows("terraform plan"); }
+    #[test] fn terraform_apply_allowed()        { assert_allows("terraform apply"); }
+    #[test] fn terraform_force_unlock_blocked() { assert_blocks("terraform force-unlock abc123"); }
+    #[test] fn terraform_state_rm_blocked()     { assert_blocks("terraform state rm aws_instance.web"); }
+    #[test] fn terraform_state_list_allowed()   { assert_allows("terraform state list"); }
+    #[test] fn pulumi_destroy_blocked()         { assert_blocks("pulumi destroy"); }
+    #[test] fn pulumi_up_allowed()              { assert_allows("pulumi up"); }
+
+    // ── Cloud CLI ───────────────────────────────────────────────
+
+    #[test] fn aws_terminate_blocked()          { assert_blocks("aws ec2 terminate-instances --instance-ids i-123"); }
+    #[test] fn aws_describe_allowed()           { assert_allows("aws ec2 describe-instances"); }
+    #[test] fn aws_s3_rb_force_blocked()        { assert_blocks("aws s3 rb s3://bucket --force"); }
+    #[test] fn aws_s3_ls_allowed()              { assert_allows("aws s3 ls s3://bucket"); }
+    #[test] fn aws_rds_delete_blocked()         { assert_blocks("aws rds delete-db-instance --db-instance-id mydb"); }
+    #[test] fn gcloud_delete_blocked()          { assert_blocks("gcloud compute instances delete my-vm"); }
+    #[test] fn gcloud_list_allowed()            { assert_allows("gcloud compute instances list"); }
+    #[test] fn az_vm_delete_blocked()           { assert_blocks("az vm delete --name myvm -g mygroup"); }
+    #[test] fn az_group_delete_blocked()        { assert_blocks("az group delete --name mygroup"); }
+    #[test] fn az_group_list_allowed()          { assert_allows("az group list"); }
+
+    // ── FluxCD ──────────────────────────────────────────────────
+
+    #[test] fn flux_uninstall_blocked()         { assert_blocks("flux uninstall"); }
+    #[test] fn flux_delete_source_warned()      { assert_warns("flux delete source git my-repo"); }
+    #[test] fn flux_delete_ks_warned()          { assert_warns("flux delete kustomization my-app"); }
+    #[test] fn flux_reconcile_allowed()         { assert_allows("flux reconcile kustomization my-app"); }
+    #[test] fn flux_get_allowed()               { assert_allows("flux get kustomizations"); }
+
     // ── Engine ──────────────────────────────────────────────────
 
     #[test]
     fn engine_compiles_all_defaults() {
         let e = engine();
-        assert!(e.rule_count() >= 25);
+        assert!(e.rule_count() >= 40);
     }
 
     #[test]
