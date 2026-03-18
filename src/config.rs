@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn defaults_parse() {
         let rules = DefaultsProvider.rules().unwrap();
-        assert!(rules.len() >= 40, "expected 40+ default rules, got {}", rules.len());
+        assert!(rules.len() >= 25, "expected 25+ default rules, got {}", rules.len());
     }
 
     #[test]
@@ -207,8 +207,7 @@ mod tests {
         for cat in [
             Category::Filesystem, Category::Git, Category::Database,
             Category::Kubernetes, Category::Nix, Category::Docker,
-            Category::Secrets, Category::Terraform, Category::Cloud,
-            Category::Flux,
+            Category::Secrets, Category::Terraform, Category::Flux,
         ] {
             assert!(cats.contains(&cat), "missing category: {cat:?}");
         }
@@ -383,5 +382,85 @@ mod tests {
         let config = GuardrailConfig::default();
         let rules = resolve_rules(&defaults, &config);
         assert_eq!(rules.len(), defaults.len());
+    }
+
+    // ─── Suite file loading ──────────────────────────────────────
+
+    #[test]
+    fn akeyless_suite_parses() {
+        let yaml = include_str!("../rules/akeyless.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 30, "expected 30+ akeyless rules, got {}", rules.len());
+        assert!(rules.iter().all(|r| r.category == Category::Akeyless));
+    }
+
+    #[test]
+    fn aws_suite_parses() {
+        let yaml = include_str!("../rules/aws.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 20, "expected 20+ aws rules, got {}", rules.len());
+        assert!(rules.iter().all(|r| r.category == Category::Cloud));
+    }
+
+    #[test]
+    fn gcp_suite_parses() {
+        let yaml = include_str!("../rules/gcp.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 10);
+    }
+
+    #[test]
+    fn azure_suite_parses() {
+        let yaml = include_str!("../rules/azure.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 15);
+    }
+
+    #[test]
+    fn process_suite_parses() {
+        let yaml = include_str!("../rules/process.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 5);
+        assert!(rules.iter().all(|r| r.category == Category::Process));
+    }
+
+    #[test]
+    fn network_suite_parses() {
+        let yaml = include_str!("../rules/network.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 5);
+        assert!(rules.iter().all(|r| r.category == Category::Network));
+    }
+
+    #[test]
+    fn nosql_suite_parses() {
+        let yaml = include_str!("../rules/nosql.yaml");
+        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        assert!(rules.len() >= 5);
+        assert!(rules.iter().all(|r| r.category == Category::Nosql));
+    }
+
+    #[test]
+    fn all_suites_have_unique_rule_names() {
+        let mut all_names = std::collections::BTreeSet::new();
+        let mut dupes = vec![];
+        for yaml_str in [
+            include_str!("../rules/defaults.yaml"),
+            include_str!("../rules/akeyless.yaml"),
+            include_str!("../rules/aws.yaml"),
+            include_str!("../rules/gcp.yaml"),
+            include_str!("../rules/azure.yaml"),
+            include_str!("../rules/process.yaml"),
+            include_str!("../rules/network.yaml"),
+            include_str!("../rules/nosql.yaml"),
+        ] {
+            let rules: Vec<Rule> = serde_yaml::from_str(yaml_str).unwrap();
+            for rule in rules {
+                if !all_names.insert(rule.name.clone()) {
+                    dupes.push(rule.name);
+                }
+            }
+        }
+        assert!(dupes.is_empty(), "duplicate rule names across suites: {dupes:?}");
     }
 }

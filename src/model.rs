@@ -21,6 +21,10 @@ pub enum Category {
     Terraform,
     Cloud,
     Flux,
+    Akeyless,
+    Process,
+    Network,
+    Nosql,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

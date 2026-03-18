@@ -1,0 +1,37 @@
+# Process/system destructive operations
+
+- name: kill-9
+  pattern: 'kill\s+-9\s'
+  severity: warn
+  message: "kill -9 sends SIGKILL — no graceful shutdown"
+  category: process
+
+- name: killall
+  pattern: 'killall\s'
+  severity: warn
+  message: "killall sends signal to all processes matching name"
+  category: process
+
+- name: pkill-broad
+  pattern: 'pkill\s+-9\s'
+  severity: warn
+  message: "pkill -9 sends SIGKILL to matching processes"
+  category: process
+
+- name: shutdown
+  pattern: '\b(shutdown|poweroff|halt|reboot)\b'
+  severity: block
+  message: "System shutdown/reboot command"
+  category: process
+
+- name: systemctl-stop-critical
+  pattern: 'systemctl\s+stop\s+(sshd|networking|docker|k3s|kubelet)'
+  severity: block
+  message: "Stopping critical system service"
+  category: process
+
+- name: launchctl-unload
+  pattern: 'launchctl\s+(unload|bootout)\s'
+  severity: warn
+  message: "macOS service unload"
+  category: process

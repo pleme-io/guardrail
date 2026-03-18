@@ -1,0 +1,167 @@
+# AWS CLI destructive operations — comprehensive coverage
+
+# ── Compute ────────────────────────────────────────────────────
+- name: aws-ec2-terminate
+  pattern: 'aws\s+ec2\s+terminate-instances'
+  severity: block
+  message: "AWS EC2 instance termination"
+  category: cloud
+
+- name: aws-ec2-delete-volume
+  pattern: 'aws\s+ec2\s+delete-volume'
+  severity: block
+  message: "AWS EBS volume deletion — data loss"
+  category: cloud
+
+- name: aws-ec2-delete-snapshot
+  pattern: 'aws\s+ec2\s+delete-snapshot'
+  severity: warn
+  message: "AWS EBS snapshot deletion"
+  category: cloud
+
+- name: aws-ec2-delete-vpc
+  pattern: 'aws\s+ec2\s+delete-vpc'
+  severity: block
+  message: "AWS VPC deletion"
+  category: cloud
+
+- name: aws-ec2-delete-subnet
+  pattern: 'aws\s+ec2\s+delete-subnet'
+  severity: warn
+  message: "AWS subnet deletion"
+  category: cloud
+
+- name: aws-ec2-delete-security-group
+  pattern: 'aws\s+ec2\s+delete-security-group'
+  severity: warn
+  message: "AWS security group deletion"
+  category: cloud
+
+# ── Storage ────────────────────────────────────────────────────
+- name: aws-s3-rb-force
+  pattern: 'aws\s+s3\s+rb\s+.*--force'
+  severity: block
+  message: "AWS S3 force-remove bucket"
+  category: cloud
+
+- name: aws-s3-rm-recursive
+  pattern: 'aws\s+s3\s+rm\s+.*--recursive'
+  severity: warn
+  message: "AWS S3 recursive delete"
+  category: cloud
+
+# ── Database ───────────────────────────────────────────────────
+- name: aws-rds-delete-instance
+  pattern: 'aws\s+rds\s+delete-db-instance'
+  severity: block
+  message: "AWS RDS instance deletion"
+  category: cloud
+
+- name: aws-rds-delete-cluster
+  pattern: 'aws\s+rds\s+delete-db-cluster'
+  severity: block
+  message: "AWS RDS cluster deletion"
+  category: cloud
+
+- name: aws-dynamodb-delete-table
+  pattern: 'aws\s+dynamodb\s+delete-table'
+  severity: block
+  message: "AWS DynamoDB table deletion"
+  category: cloud
+
+- name: aws-elasticache-delete
+  pattern: 'aws\s+elasticache\s+delete-(cache-cluster|replication-group)'
+  severity: block
+  message: "AWS ElastiCache deletion"
+  category: cloud
+
+# ── Containers ─────────────────────────────────────────────────
+- name: aws-eks-delete-cluster
+  pattern: 'aws\s+eks\s+delete-cluster'
+  severity: block
+  message: "AWS EKS cluster deletion"
+  category: cloud
+
+- name: aws-ecs-delete-cluster
+  pattern: 'aws\s+ecs\s+delete-cluster'
+  severity: block
+  message: "AWS ECS cluster deletion"
+  category: cloud
+
+- name: aws-ecs-delete-service
+  pattern: 'aws\s+ecs\s+delete-service'
+  severity: warn
+  message: "AWS ECS service deletion"
+  category: cloud
+
+- name: aws-ecr-delete-repository
+  pattern: 'aws\s+ecr\s+delete-repository'
+  severity: block
+  message: "AWS ECR repository deletion — all images lost"
+  category: cloud
+
+# ── Serverless ─────────────────────────────────────────────────
+- name: aws-lambda-delete-function
+  pattern: 'aws\s+lambda\s+delete-function'
+  severity: warn
+  message: "AWS Lambda function deletion"
+  category: cloud
+
+# ── Infrastructure ─────────────────────────────────────────────
+- name: aws-cloudformation-delete-stack
+  pattern: 'aws\s+cloudformation\s+delete-stack'
+  severity: block
+  message: "AWS CloudFormation stack deletion — destroys all stack resources"
+  category: cloud
+
+# ── IAM ────────────────────────────────────────────────────────
+- name: aws-iam-delete-role
+  pattern: 'aws\s+iam\s+delete-role\b'
+  severity: warn
+  message: "AWS IAM role deletion"
+  category: cloud
+
+- name: aws-iam-delete-user
+  pattern: 'aws\s+iam\s+delete-user\b'
+  severity: block
+  message: "AWS IAM user deletion"
+  category: cloud
+
+- name: aws-iam-delete-policy
+  pattern: 'aws\s+iam\s+delete-policy\b'
+  severity: warn
+  message: "AWS IAM policy deletion"
+  category: cloud
+
+# ── DNS ────────────────────────────────────────────────────────
+- name: aws-route53-delete-hosted-zone
+  pattern: 'aws\s+route53\s+delete-hosted-zone'
+  severity: block
+  message: "AWS Route53 hosted zone deletion — DNS records lost"
+  category: cloud
+
+# ── Secrets/KMS ────────────────────────────────────────────────
+- name: aws-secretsmanager-delete
+  pattern: 'aws\s+secretsmanager\s+delete-secret'
+  severity: block
+  message: "AWS Secrets Manager secret deletion"
+  category: cloud
+
+- name: aws-kms-schedule-delete
+  pattern: 'aws\s+kms\s+schedule-key-deletion'
+  severity: block
+  message: "AWS KMS key deletion — encrypted data becomes unrecoverable"
+  category: cloud
+
+# ── Messaging ──────────────────────────────────────────────────
+- name: aws-sqs-delete-queue
+  pattern: 'aws\s+sqs\s+delete-queue'
+  severity: warn
+  message: "AWS SQS queue deletion"
+  category: cloud
+
+- name: aws-sns-delete-topic
+  pattern: 'aws\s+sns\s+delete-topic'
+  severity: warn
+  message: "AWS SNS topic deletion"
+  category: cloud

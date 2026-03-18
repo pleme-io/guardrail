@@ -1,0 +1,93 @@
+# GCP CLI destructive operations
+
+# ── Compute ────────────────────────────────────────────────────
+- name: gcloud-compute-delete
+  pattern: 'gcloud\s+compute\s+instances\s+delete'
+  severity: block
+  message: "GCP compute instance deletion"
+  category: cloud
+
+- name: gcloud-compute-delete-disk
+  pattern: 'gcloud\s+compute\s+disks\s+delete'
+  severity: block
+  message: "GCP persistent disk deletion"
+  category: cloud
+
+- name: gcloud-compute-delete-firewall
+  pattern: 'gcloud\s+compute\s+firewall-rules\s+delete'
+  severity: warn
+  message: "GCP firewall rule deletion"
+  category: cloud
+
+- name: gcloud-compute-delete-network
+  pattern: 'gcloud\s+compute\s+networks\s+delete'
+  severity: block
+  message: "GCP VPC network deletion"
+  category: cloud
+
+# ── Containers ─────────────────────────────────────────────────
+- name: gcloud-gke-delete
+  pattern: 'gcloud\s+container\s+clusters\s+delete'
+  severity: block
+  message: "GCP GKE cluster deletion"
+  category: cloud
+
+# ── Database ───────────────────────────────────────────────────
+- name: gcloud-sql-delete
+  pattern: 'gcloud\s+sql\s+instances\s+delete'
+  severity: block
+  message: "GCP Cloud SQL instance deletion"
+  category: cloud
+
+- name: gcloud-spanner-delete
+  pattern: 'gcloud\s+spanner\s+(instances|databases)\s+delete'
+  severity: block
+  message: "GCP Cloud Spanner deletion"
+  category: cloud
+
+- name: gcloud-bigtable-delete
+  pattern: 'gcloud\s+bigtable\s+instances\s+delete'
+  severity: block
+  message: "GCP Bigtable instance deletion"
+  category: cloud
+
+# ── Storage ────────────────────────────────────────────────────
+- name: gsutil-rm-recursive
+  pattern: 'gsutil\s+(rm\s+-r|rb)\s+gs://'
+  severity: block
+  message: "GCP Cloud Storage bucket/recursive deletion"
+  category: cloud
+
+# ── Serverless ─────────────────────────────────────────────────
+- name: gcloud-functions-delete
+  pattern: 'gcloud\s+functions\s+delete'
+  severity: warn
+  message: "GCP Cloud Function deletion"
+  category: cloud
+
+- name: gcloud-run-delete
+  pattern: 'gcloud\s+run\s+services\s+delete'
+  severity: warn
+  message: "GCP Cloud Run service deletion"
+  category: cloud
+
+# ── Project ────────────────────────────────────────────────────
+- name: gcloud-project-delete
+  pattern: 'gcloud\s+projects\s+delete'
+  severity: block
+  message: "GCP project deletion — destroys everything"
+  category: cloud
+
+# ── Pub/Sub ────────────────────────────────────────────────────
+- name: gcloud-pubsub-delete-topic
+  pattern: 'gcloud\s+pubsub\s+topics\s+delete'
+  severity: warn
+  message: "GCP Pub/Sub topic deletion"
+  category: cloud
+
+# ── BigQuery ───────────────────────────────────────────────────
+- name: bq-rm-dataset
+  pattern: 'bq\s+rm\s+(-r\s+)?-f?\s*\S+:\S+'
+  severity: block
+  message: "BigQuery dataset/table deletion"
+  category: cloud

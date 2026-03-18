@@ -1,0 +1,118 @@
+# Azure CLI destructive operations
+
+# ── Compute ────────────────────────────────────────────────────
+- name: az-vm-delete
+  pattern: 'az\s+vm\s+delete'
+  severity: block
+  message: "Azure VM deletion"
+  category: cloud
+
+- name: az-vmss-delete
+  pattern: 'az\s+vmss\s+delete'
+  severity: block
+  message: "Azure VM Scale Set deletion"
+  category: cloud
+
+- name: az-disk-delete
+  pattern: 'az\s+disk\s+delete'
+  severity: warn
+  message: "Azure managed disk deletion"
+  category: cloud
+
+# ── Containers ─────────────────────────────────────────────────
+- name: az-aks-delete
+  pattern: 'az\s+aks\s+delete'
+  severity: block
+  message: "Azure AKS cluster deletion"
+  category: cloud
+
+- name: az-acr-delete
+  pattern: 'az\s+acr\s+delete'
+  severity: block
+  message: "Azure Container Registry deletion"
+  category: cloud
+
+# ── Database ───────────────────────────────────────────────────
+- name: az-sql-server-delete
+  pattern: 'az\s+sql\s+server\s+delete'
+  severity: block
+  message: "Azure SQL server deletion"
+  category: cloud
+
+- name: az-sql-db-delete
+  pattern: 'az\s+sql\s+db\s+delete'
+  severity: block
+  message: "Azure SQL database deletion"
+  category: cloud
+
+- name: az-cosmosdb-delete
+  pattern: 'az\s+cosmosdb\s+delete'
+  severity: block
+  message: "Azure Cosmos DB account deletion"
+  category: cloud
+
+# ── Storage ────────────────────────────────────────────────────
+- name: az-storage-account-delete
+  pattern: 'az\s+storage\s+account\s+delete'
+  severity: block
+  message: "Azure storage account deletion"
+  category: cloud
+
+- name: az-storage-container-delete
+  pattern: 'az\s+storage\s+container\s+delete'
+  severity: warn
+  message: "Azure storage container deletion"
+  category: cloud
+
+# ── Resource Groups ────────────────────────────────────────────
+- name: az-group-delete
+  pattern: 'az\s+group\s+delete'
+  severity: block
+  message: "Azure resource group deletion — destroys all resources"
+  category: cloud
+
+# ── Serverless ─────────────────────────────────────────────────
+- name: az-functionapp-delete
+  pattern: 'az\s+functionapp\s+delete'
+  severity: warn
+  message: "Azure Function App deletion"
+  category: cloud
+
+- name: az-webapp-delete
+  pattern: 'az\s+webapp\s+delete'
+  severity: warn
+  message: "Azure Web App deletion"
+  category: cloud
+
+# ── Secrets ────────────────────────────────────────────────────
+- name: az-keyvault-delete
+  pattern: 'az\s+keyvault\s+delete'
+  severity: block
+  message: "Azure Key Vault deletion"
+  category: cloud
+
+- name: az-keyvault-secret-delete
+  pattern: 'az\s+keyvault\s+secret\s+delete'
+  severity: block
+  message: "Azure Key Vault secret deletion"
+  category: cloud
+
+# ── Network ────────────────────────────────────────────────────
+- name: az-network-vnet-delete
+  pattern: 'az\s+network\s+vnet\s+delete'
+  severity: block
+  message: "Azure VNet deletion"
+  category: cloud
+
+- name: az-network-nsg-delete
+  pattern: 'az\s+network\s+nsg\s+delete'
+  severity: warn
+  message: "Azure NSG deletion"
+  category: cloud
+
+# ── DNS ────────────────────────────────────────────────────────
+- name: az-dns-zone-delete
+  pattern: 'az\s+network\s+dns\s+zone\s+delete'
+  severity: block
+  message: "Azure DNS zone deletion"
+  category: cloud

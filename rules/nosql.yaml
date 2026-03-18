@@ -1,0 +1,53 @@
+# NoSQL/cache destructive operations
+
+# ── Redis ──────────────────────────────────────────────────────
+- name: redis-flushall
+  pattern: '(?i)(redis-cli|FLUSHALL)'
+  severity: block
+  message: "Redis FLUSHALL deletes all keys in all databases"
+  category: nosql
+
+- name: redis-flushdb
+  pattern: '(?i)FLUSHDB'
+  severity: block
+  message: "Redis FLUSHDB deletes all keys in current database"
+  category: nosql
+
+# ── MongoDB ────────────────────────────────────────────────────
+- name: mongo-drop-database
+  pattern: '(?i)db\.(dropDatabase|drop_database)\(\)'
+  severity: block
+  message: "MongoDB dropDatabase"
+  category: nosql
+
+- name: mongo-drop-collection
+  pattern: '(?i)db\.\w+\.drop\(\)'
+  severity: block
+  message: "MongoDB collection drop"
+  category: nosql
+
+- name: mongosh-drop
+  pattern: '(?i)(mongosh?|mongo)\s+.*--eval.*drop'
+  severity: warn
+  message: "MongoDB shell eval with drop"
+  category: nosql
+
+# ── Elasticsearch ──────────────────────────────────────────────
+- name: es-delete-index
+  pattern: 'curl\s+.*-X\s*DELETE\s+.*localhost:9200/'
+  severity: block
+  message: "Elasticsearch index deletion via curl"
+  category: nosql
+
+- name: es-delete-all
+  pattern: 'curl\s+.*DELETE.*/_all'
+  severity: block
+  message: "Elasticsearch delete all indices"
+  category: nosql
+
+# ── Cassandra ──────────────────────────────────────────────────
+- name: cassandra-drop-keyspace
+  pattern: '(?i)\bDROP\s+KEYSPACE\b'
+  severity: block
+  message: "Cassandra DROP KEYSPACE"
+  category: nosql

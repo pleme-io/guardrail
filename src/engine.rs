@@ -176,30 +176,9 @@ mod tests {
     #[test] fn pulumi_destroy_blocked()         { assert_blocks("pulumi destroy"); }
     #[test] fn pulumi_up_allowed()              { assert_allows("pulumi up"); }
 
-    // ── Cloud CLI ───────────────────────────────────────────────
-
-    #[test] fn aws_terminate_blocked()          { assert_blocks("aws ec2 terminate-instances --instance-ids i-123"); }
-    #[test] fn aws_describe_allowed()           { assert_allows("aws ec2 describe-instances"); }
-    #[test] fn aws_s3_rb_force_blocked()        { assert_blocks("aws s3 rb s3://bucket --force"); }
-    #[test] fn aws_s3_ls_allowed()              { assert_allows("aws s3 ls s3://bucket"); }
-    #[test] fn aws_rds_delete_blocked()         { assert_blocks("aws rds delete-db-instance --db-instance-id mydb"); }
-    #[test] fn gcloud_delete_blocked()          { assert_blocks("gcloud compute instances delete my-vm"); }
-    #[test] fn gcloud_list_allowed()            { assert_allows("gcloud compute instances list"); }
-    #[test] fn az_vm_delete_blocked()           { assert_blocks("az vm delete --name myvm -g mygroup"); }
-    #[test] fn az_group_delete_blocked()        { assert_blocks("az group delete --name mygroup"); }
-    #[test] fn az_group_list_allowed()          { assert_allows("az group list"); }
-    #[test] fn az_sql_delete_blocked()          { assert_blocks("az sql server delete --name myserver"); }
-    #[test] fn az_storage_delete_blocked()      { assert_blocks("az storage account delete --name myaccount"); }
-    #[test] fn az_aks_delete_blocked()          { assert_blocks("az aks delete --name mycluster -g mygroup"); }
-    #[test] fn aws_dynamodb_delete_blocked()    { assert_blocks("aws dynamodb delete-table --table-name mytable"); }
-    #[test] fn aws_eks_delete_blocked()         { assert_blocks("aws eks delete-cluster --name mycluster"); }
-    #[test] fn aws_cfn_delete_blocked()         { assert_blocks("aws cloudformation delete-stack --stack-name mystack"); }
-    #[test] fn aws_lambda_delete_warned()       { assert_warns("aws lambda delete-function --function-name myfn"); }
-    #[test] fn aws_route53_delete_blocked()     { assert_blocks("aws route53 delete-hosted-zone --id Z123"); }
-    #[test] fn gcloud_project_delete_blocked()  { assert_blocks("gcloud projects delete my-project"); }
-    #[test] fn gcloud_gke_delete_blocked()      { assert_blocks("gcloud container clusters delete mycluster"); }
-    #[test] fn gsutil_rm_recursive_blocked()    { assert_blocks("gsutil rm -r gs://mybucket"); }
-    #[test] fn gsutil_rb_blocked()              { assert_blocks("gsutil rb gs://mybucket"); }
+    // ── Cloud CLI — tested via suite loading in config tests ────
+    // Cloud rules are in rules.d/ suites, not compiled-in defaults.
+    // See config::tests for DirectoryProvider tests.
 
     // ── FluxCD ──────────────────────────────────────────────────
 
@@ -214,7 +193,7 @@ mod tests {
     #[test]
     fn engine_compiles_all_defaults() {
         let e = engine();
-        assert!(e.rule_count() >= 40);
+        assert!(e.rule_count() >= 30);
     }
 
     #[test]

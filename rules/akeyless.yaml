@@ -1,0 +1,222 @@
+# Akeyless CLI guardrail suite — deployed via blackmatter-akeyless
+# Covers all 44 destructive operations from the Akeyless API
+
+# ── Delete: Secrets/Items ──────────────────────────────────────
+- name: akeyless-delete-item
+  pattern: '(?i)(akeyless|aky)\s+delete-item\b'
+  severity: block
+  message: "Akeyless delete-item — permanently destroys a secret/key"
+  category: akeyless
+
+- name: akeyless-delete-items
+  pattern: '(?i)(akeyless|aky)\s+delete-items\b'
+  severity: block
+  message: "Akeyless delete-items — batch secret deletion"
+  category: akeyless
+
+- name: akeyless-dynamic-secret-delete
+  pattern: '(?i)(akeyless|aky)\s+dynamic-secret-delete\b'
+  severity: block
+  message: "Akeyless dynamic-secret-delete — removes dynamic secret producer"
+  category: akeyless
+
+- name: akeyless-rotated-secret-delete
+  pattern: '(?i)(akeyless|aky)\s+rotated-secret-delete\b'
+  severity: block
+  message: "Akeyless rotated-secret-delete — removes rotated secret"
+  category: akeyless
+
+- name: akeyless-static-secret-delete-sync
+  pattern: '(?i)(akeyless|aky)\s+static-secret-delete-sync\b'
+  severity: block
+  message: "Akeyless static-secret-delete-sync — removes sync configuration"
+  category: akeyless
+
+- name: akeyless-folder-delete
+  pattern: '(?i)(akeyless|aky)\s+folder-delete\b'
+  severity: block
+  message: "Akeyless folder-delete — removes folder and potentially nested items"
+  category: akeyless
+
+# ── Delete: Auth Methods ───────────────────────────────────────
+- name: akeyless-delete-auth-method
+  pattern: '(?i)(akeyless|aky)\s+delete-auth-method\b'
+  severity: block
+  message: "Akeyless delete-auth-method — removes authentication method"
+  category: akeyless
+
+- name: akeyless-delete-auth-methods
+  pattern: '(?i)(akeyless|aky)\s+delete-auth-methods\b'
+  severity: block
+  message: "Akeyless delete-auth-methods — batch auth method deletion"
+  category: akeyless
+
+# ── Delete: Roles & Access ────────────────────────────────────
+- name: akeyless-delete-role
+  pattern: '(?i)(akeyless|aky)\s+delete-role\b'
+  severity: block
+  message: "Akeyless delete-role — removes RBAC role"
+  category: akeyless
+
+- name: akeyless-delete-roles
+  pattern: '(?i)(akeyless|aky)\s+delete-roles\b'
+  severity: block
+  message: "Akeyless delete-roles — batch role deletion"
+  category: akeyless
+
+- name: akeyless-delete-role-association
+  pattern: '(?i)(akeyless|aky)\s+delete-role-association\b'
+  severity: block
+  message: "Akeyless delete-role-association — removes auth↔role binding"
+  category: akeyless
+
+- name: akeyless-delete-role-rule
+  pattern: '(?i)(akeyless|aky)\s+delete-role-rule\b'
+  severity: warn
+  message: "Akeyless delete-role-rule — removes access rule from role"
+  category: akeyless
+
+- name: akeyless-delete-group
+  pattern: '(?i)(akeyless|aky)\s+delete-group\b'
+  severity: block
+  message: "Akeyless delete-group — removes access group"
+  category: akeyless
+
+- name: akeyless-policies-delete
+  pattern: '(?i)(akeyless|aky)\s+policies-delete\b'
+  severity: block
+  message: "Akeyless policies-delete — removes security policy"
+  category: akeyless
+
+# ── Delete: Targets ────────────────────────────────────────────
+- name: akeyless-delete-target
+  pattern: '(?i)(akeyless|aky)\s+delete-target\b'
+  severity: block
+  message: "Akeyless delete-target — removes target integration"
+  category: akeyless
+
+- name: akeyless-delete-targets
+  pattern: '(?i)(akeyless|aky)\s+delete-targets\b'
+  severity: block
+  message: "Akeyless delete-targets — batch target deletion"
+  category: akeyless
+
+- name: akeyless-delete-target-association
+  pattern: '(?i)(akeyless|aky)\s+delete-target-association\b'
+  severity: warn
+  message: "Akeyless delete-target-association — removes item↔target binding"
+  category: akeyless
+
+# ── Delete: Gateway/Infrastructure ─────────────────────────────
+- name: akeyless-delete-gw-cluster
+  pattern: '(?i)(akeyless|aky)\s+delete-gw-cluster\b'
+  severity: block
+  message: "Akeyless delete-gw-cluster — removes entire gateway cluster"
+  category: akeyless
+
+- name: akeyless-gateway-delete-producer
+  pattern: '(?i)(akeyless|aky)\s+gateway-delete-producer\b'
+  severity: block
+  message: "Akeyless gateway-delete-producer — removes dynamic secret producer from gateway"
+  category: akeyless
+
+- name: akeyless-gateway-delete-k8s-auth
+  pattern: '(?i)(akeyless|aky)\s+gateway-delete-k8s-auth-config\b'
+  severity: block
+  message: "Akeyless gateway-delete-k8s-auth-config — removes K8s auth from gateway"
+  category: akeyless
+
+- name: akeyless-gateway-delete-migration
+  pattern: '(?i)(akeyless|aky)\s+gateway-delete-migration\b'
+  severity: block
+  message: "Akeyless gateway-delete-migration — removes migration configuration"
+  category: akeyless
+
+- name: akeyless-gateway-delete-allowed-access
+  pattern: '(?i)(akeyless|aky)\s+gateway-delete-allowed-access\b'
+  severity: block
+  message: "Akeyless gateway-delete-allowed-access — removes gateway access"
+  category: akeyless
+
+- name: akeyless-delete-event-forwarder
+  pattern: '(?i)(akeyless|aky)\s+delete-event-forwarder\b'
+  severity: warn
+  message: "Akeyless delete-event-forwarder — removes audit/event forwarding"
+  category: akeyless
+
+# ── Delete: KMIP ───────────────────────────────────────────────
+- name: akeyless-kmip-delete-client
+  pattern: '(?i)(akeyless|aky)\s+kmip-delete-client\b'
+  severity: block
+  message: "Akeyless kmip-delete-client — removes KMIP client"
+  category: akeyless
+
+- name: akeyless-kmip-delete-server
+  pattern: '(?i)(akeyless|aky)\s+kmip-delete-server\b'
+  severity: block
+  message: "Akeyless kmip-delete-server — removes KMIP server"
+  category: akeyless
+
+# ── Delete: Other ──────────────────────────────────────────────
+- name: akeyless-esm-delete
+  pattern: '(?i)(akeyless|aky)\s+esm-delete\b'
+  severity: block
+  message: "Akeyless esm-delete — removes external secrets manager sync"
+  category: akeyless
+
+- name: akeyless-usc-delete
+  pattern: '(?i)(akeyless|aky)\s+usc-delete\b'
+  severity: block
+  message: "Akeyless usc-delete — removes universal secrets connector"
+  category: akeyless
+
+- name: akeyless-dynamic-secret-tmp-creds-delete
+  pattern: '(?i)(akeyless|aky)\s+dynamic-secret-tmp-creds-delete\b'
+  severity: warn
+  message: "Akeyless dynamic-secret-tmp-creds-delete — revokes temporary credentials"
+  category: akeyless
+
+# ── Revoke Operations ──────────────────────────────────────────
+- name: akeyless-revoke-creds
+  pattern: '(?i)(akeyless|aky)\s+revoke-creds\b'
+  severity: block
+  message: "Akeyless revoke-creds — revokes dynamic secret credentials"
+  category: akeyless
+
+- name: akeyless-revoke-certificate
+  pattern: '(?i)(akeyless|aky)\s+revoke-certificate\b'
+  severity: block
+  message: "Akeyless revoke-certificate — revokes PKI certificate"
+  category: akeyless
+
+- name: akeyless-gateway-revoke-tmp-users
+  pattern: '(?i)(akeyless|aky)\s+gateway-revoke-tmp-users\b'
+  severity: warn
+  message: "Akeyless gateway-revoke-tmp-users — revokes temporary gateway users"
+  category: akeyless
+
+- name: akeyless-uid-revoke-token
+  pattern: '(?i)(akeyless|aky)\s+uid-revoke-token\b'
+  severity: warn
+  message: "Akeyless uid-revoke-token — revokes authentication token"
+  category: akeyless
+
+# ── Rotate Operations ──────────────────────────────────────────
+- name: akeyless-rotate-key
+  pattern: '(?i)(akeyless|aky)\s+rotate-key\b'
+  severity: warn
+  message: "Akeyless rotate-key — rotates encryption key (old key version retired)"
+  category: akeyless
+
+- name: akeyless-rotate-secret
+  pattern: '(?i)(akeyless|aky)\s+rotate-secret\b'
+  severity: warn
+  message: "Akeyless rotate-secret — forces immediate secret rotation"
+  category: akeyless
+
+# ── Reset Operations ───────────────────────────────────────────
+- name: akeyless-reset-access-key
+  pattern: '(?i)(akeyless|aky)\s+reset-access-key\b'
+  severity: block
+  message: "Akeyless reset-access-key — resets API access key (old key invalidated)"
+  category: akeyless
