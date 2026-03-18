@@ -1,12 +1,6 @@
-use regex::Regex;
+use regex::RegexSet;
 
 use crate::model::{Decision, Rule, Severity};
-
-/// A rule with its regex pre-compiled.
-pub struct CompiledRule {
-    pub rule: Rule,
-    pub regex: Regex,
-}
 
 /// Trait for testable rule matching.
 pub trait RuleEngine {
@@ -15,46 +9,67 @@ pub trait RuleEngine {
     fn rules(&self) -> Vec<&Rule>;
 }
 
-/// Production engine: compiles regexes once, matches against all rules.
+/// Production engine using RegexSet — matches ALL patterns in a single
+/// pass through the input. O(input_length), NOT O(pattern_count).
+///
+/// At 10,000 rules this is orders of magnitude faster than linear scan.
 pub struct RegexEngine {
-    rules: Vec<CompiledRule>,
+    /// The compiled RegexSet — one DFA for all patterns.
+    set: RegexSet,
+    /// Rules in the same order as the RegexSet patterns.
+    rules: Vec<Rule>,
 }
 
 impl RegexEngine {
-    /// Compile all rules into regexes.
+    /// Compile all rules into a single RegexSet.
     ///
     /// # Errors
     ///
     /// Returns an error if any regex pattern is invalid.
     pub fn new(rules: Vec<Rule>) -> anyhow::Result<Self> {
-        let compiled = rules
-            .into_iter()
-            .map(|rule| {
-                let regex = Regex::new(&rule.pattern)
-                    .map_err(|e| anyhow::anyhow!("rule '{}': invalid regex: {e}", rule.name))?;
-                Ok(CompiledRule { rule, regex })
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        Ok(Self { rules: compiled })
+        let patterns: Vec<&str> = rules.iter().map(|r| r.pattern.as_str()).collect();
+        let set = RegexSet::new(&patterns)
+            .map_err(|e| anyhow::anyhow!("invalid regex in rule set: {e}"))?;
+        Ok(Self { set, rules })
     }
 }
 
 impl RuleEngine for RegexEngine {
     fn check(&self, command: &str) -> Decision {
-        for cr in &self.rules {
-            if cr.regex.is_match(command) {
-                return match cr.rule.severity {
-                    Severity::Block => Decision::Block {
-                        rule: cr.rule.name.clone(),
-                        message: cr.rule.message.clone(),
-                    },
-                    Severity::Warn => Decision::Warn {
-                        rule: cr.rule.name.clone(),
-                        message: cr.rule.message.clone(),
-                    },
-                };
+        let matches: Vec<usize> = self.set.matches(command).into_iter().collect();
+
+        if matches.is_empty() {
+            return Decision::Allow;
+        }
+
+        // Return the highest-severity match (Block > Warn).
+        // Among same severity, return the first matched rule.
+        let mut best_block: Option<&Rule> = None;
+        let mut best_warn: Option<&Rule> = None;
+
+        for &idx in &matches {
+            let rule = &self.rules[idx];
+            match rule.severity {
+                Severity::Block if best_block.is_none() => best_block = Some(rule),
+                Severity::Warn if best_warn.is_none() => best_warn = Some(rule),
+                _ => {}
             }
         }
+
+        if let Some(rule) = best_block {
+            return Decision::Block {
+                rule: rule.name.clone(),
+                message: rule.message.clone(),
+            };
+        }
+
+        if let Some(rule) = best_warn {
+            return Decision::Warn {
+                rule: rule.name.clone(),
+                message: rule.message.clone(),
+            };
+        }
+
         Decision::Allow
     }
 
@@ -63,7 +78,7 @@ impl RuleEngine for RegexEngine {
     }
 
     fn rules(&self) -> Vec<&Rule> {
-        self.rules.iter().map(|cr| &cr.rule).collect()
+        self.rules.iter().collect()
     }
 }
 
@@ -182,8 +197,6 @@ mod tests {
     #[test] fn pulumi_up_allowed()              { assert_allows("pulumi up"); }
 
     // ── Cloud CLI — tested via suite loading in config tests ────
-    // Cloud rules are in rules.d/ suites, not compiled-in defaults.
-    // See config::tests for DirectoryProvider tests.
 
     // ── FluxCD ──────────────────────────────────────────────────
 
@@ -212,5 +225,33 @@ mod tests {
             category: Category::Filesystem,
         }];
         assert!(RegexEngine::new(rules).is_err());
+    }
+
+    // ── RegexSet behavior ───────────────────────────────────────
+
+    #[test]
+    fn block_takes_priority_over_warn() {
+        use crate::model::{Category, Severity};
+        let rules = vec![
+            Rule {
+                name: "warn-rule".into(),
+                pattern: "dangerous".into(),
+                severity: Severity::Warn,
+                message: "warning".into(),
+                category: Category::Filesystem,
+            },
+            Rule {
+                name: "block-rule".into(),
+                pattern: "dangerous".into(),
+                severity: Severity::Block,
+                message: "blocked".into(),
+                category: Category::Filesystem,
+            },
+        ];
+        let engine = RegexEngine::new(rules).unwrap();
+        match engine.check("dangerous command") {
+            Decision::Block { rule, .. } => assert_eq!(rule, "block-rule"),
+            other => panic!("expected Block, got {other:?}"),
+        }
     }
 }
