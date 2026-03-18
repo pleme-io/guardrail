@@ -206,6 +206,20 @@ mod tests {
     #[test] fn flux_reconcile_allowed()         { assert_allows("flux reconcile kustomization my-app"); }
     #[test] fn flux_get_allowed()               { assert_allows("flux get kustomizations"); }
 
+    // ── SQL with real-world quoting/escaping ────────────────────
+
+    #[test] fn drop_table_single_quotes()  { assert_blocks("psql -c 'DROP TABLE users'"); }
+    #[test] fn drop_table_double_quotes()  { assert_blocks(r#"psql -c "DROP TABLE users""#); }
+    #[test] fn drop_table_heredoc()        { assert_blocks("psql <<EOF\nDROP TABLE users;\nEOF"); }
+    #[test] fn drop_table_pipe()           { assert_blocks("echo 'DROP TABLE users' | psql"); }
+    #[test] fn drop_table_e_flag()         { assert_blocks("mysql -e 'DROP TABLE users'"); }
+    #[test] fn drop_table_multiline()      { assert_blocks("psql -c '\nDROP TABLE\nusers\n'"); }
+    #[test] fn truncate_semicolon()        { assert_blocks("psql -c 'TRUNCATE TABLE logs;'"); }
+    #[test] fn delete_from_semicolon()     { assert_blocks("psql -c 'DELETE FROM users;'"); }
+    #[test] fn select_star_not_blocked()   { assert_allows("psql -c 'SELECT * FROM users'"); }
+    #[test] fn create_not_blocked()        { assert_allows("psql -c 'CREATE TABLE t (id int)'"); }
+    #[test] fn alter_add_col_allowed()     { assert_allows("psql -c 'ALTER TABLE t ADD COLUMN name text'"); }
+
     // ── Engine ──────────────────────────────────────────────────
 
     #[test]
