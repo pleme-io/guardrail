@@ -27,7 +27,7 @@
   category: filesystem
 
 - name: mkfs-format
-  pattern: 'mkfs\.\w+'
+  pattern: '(?:^|\s)mkfs\.\w+'
   severity: block
   message: "Filesystem format command"
   category: filesystem
