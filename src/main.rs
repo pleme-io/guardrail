@@ -77,11 +77,8 @@ fn cmd_check() -> Result<()> {
 }
 
 fn cmd_validate() -> Result<()> {
-    let path = config::config_path();
-    let user_config = config::load_user_config(&path)?;
-    let defaults = config::default_rules();
-    let rules = config::resolve_rules(&defaults, &user_config);
-    let engine = RegexEngine::new(rules)?;
+    let engine = build_engine()?;
+    let user_config = config::load_user_config(&config::config_path())?;
     eprintln!(
         "guardrail: config valid ({} rules active, {} disabled, {} extra)",
         engine.rule_count(),
@@ -92,9 +89,8 @@ fn cmd_validate() -> Result<()> {
 }
 
 fn cmd_list() -> Result<()> {
-    let defaults = config::default_rules();
-    let user_config = config::load_user_config(&config::config_path())?;
-    let rules = config::resolve_rules(&defaults, &user_config);
+    let engine = build_engine()?;
+    let rules = engine.rules();
     for rule in &rules {
         let sev = match rule.severity {
             guardrail::Severity::Block => "BLOCK",

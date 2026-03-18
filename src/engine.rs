@@ -12,6 +12,7 @@ pub struct CompiledRule {
 pub trait RuleEngine {
     fn check(&self, command: &str) -> Decision;
     fn rule_count(&self) -> usize;
+    fn rules(&self) -> Vec<&Rule>;
 }
 
 /// Production engine: compiles regexes once, matches against all rules.
@@ -59,6 +60,10 @@ impl RuleEngine for RegexEngine {
 
     fn rule_count(&self) -> usize {
         self.rules.len()
+    }
+
+    fn rules(&self) -> Vec<&Rule> {
+        self.rules.iter().map(|cr| &cr.rule).collect()
     }
 }
 
