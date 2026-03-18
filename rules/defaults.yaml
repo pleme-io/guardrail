@@ -268,6 +268,72 @@
   message: "Azure resource group deletion — destroys all resources in group"
   category: cloud
 
+- name: az-sql-delete
+  pattern: 'az\s+sql\s+(server|db)\s+delete'
+  severity: block
+  message: "Azure SQL database/server deletion"
+  category: cloud
+
+- name: az-storage-delete
+  pattern: 'az\s+storage\s+(account|container)\s+delete'
+  severity: block
+  message: "Azure storage account/container deletion"
+  category: cloud
+
+- name: aws-dynamodb-delete
+  pattern: 'aws\s+dynamodb\s+delete-table'
+  severity: block
+  message: "AWS DynamoDB table deletion"
+  category: cloud
+
+- name: aws-eks-delete
+  pattern: 'aws\s+eks\s+delete-cluster'
+  severity: block
+  message: "AWS EKS cluster deletion"
+  category: cloud
+
+- name: aws-cloudformation-delete
+  pattern: 'aws\s+cloudformation\s+delete-stack'
+  severity: block
+  message: "AWS CloudFormation stack deletion — destroys all stack resources"
+  category: cloud
+
+- name: aws-lambda-delete
+  pattern: 'aws\s+lambda\s+delete-function'
+  severity: warn
+  message: "AWS Lambda function deletion"
+  category: cloud
+
+- name: aws-route53-delete
+  pattern: 'aws\s+route53\s+delete-hosted-zone'
+  severity: block
+  message: "AWS Route53 hosted zone deletion — DNS records lost"
+  category: cloud
+
+- name: gcloud-project-delete
+  pattern: 'gcloud\s+projects\s+delete'
+  severity: block
+  message: "GCP project deletion — destroys everything in the project"
+  category: cloud
+
+- name: gcloud-gke-delete
+  pattern: 'gcloud\s+container\s+clusters\s+delete'
+  severity: block
+  message: "GCP GKE cluster deletion"
+  category: cloud
+
+- name: gcloud-storage-delete
+  pattern: 'gsutil\s+(rm\s+-r|rb)\s+gs://'
+  severity: block
+  message: "GCP Cloud Storage bucket/recursive deletion"
+  category: cloud
+
+- name: az-aks-delete
+  pattern: 'az\s+aks\s+delete'
+  severity: block
+  message: "Azure AKS cluster deletion"
+  category: cloud
+
 # ── FluxCD / GitOps ───────────────────────────────────────────
 - name: flux-uninstall
   pattern: 'flux\s+uninstall'

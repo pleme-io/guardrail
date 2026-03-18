@@ -188,6 +188,18 @@ mod tests {
     #[test] fn az_vm_delete_blocked()           { assert_blocks("az vm delete --name myvm -g mygroup"); }
     #[test] fn az_group_delete_blocked()        { assert_blocks("az group delete --name mygroup"); }
     #[test] fn az_group_list_allowed()          { assert_allows("az group list"); }
+    #[test] fn az_sql_delete_blocked()          { assert_blocks("az sql server delete --name myserver"); }
+    #[test] fn az_storage_delete_blocked()      { assert_blocks("az storage account delete --name myaccount"); }
+    #[test] fn az_aks_delete_blocked()          { assert_blocks("az aks delete --name mycluster -g mygroup"); }
+    #[test] fn aws_dynamodb_delete_blocked()    { assert_blocks("aws dynamodb delete-table --table-name mytable"); }
+    #[test] fn aws_eks_delete_blocked()         { assert_blocks("aws eks delete-cluster --name mycluster"); }
+    #[test] fn aws_cfn_delete_blocked()         { assert_blocks("aws cloudformation delete-stack --stack-name mystack"); }
+    #[test] fn aws_lambda_delete_warned()       { assert_warns("aws lambda delete-function --function-name myfn"); }
+    #[test] fn aws_route53_delete_blocked()     { assert_blocks("aws route53 delete-hosted-zone --id Z123"); }
+    #[test] fn gcloud_project_delete_blocked()  { assert_blocks("gcloud projects delete my-project"); }
+    #[test] fn gcloud_gke_delete_blocked()      { assert_blocks("gcloud container clusters delete mycluster"); }
+    #[test] fn gsutil_rm_recursive_blocked()    { assert_blocks("gsutil rm -r gs://mybucket"); }
+    #[test] fn gsutil_rb_blocked()              { assert_blocks("gsutil rb gs://mybucket"); }
 
     // ── FluxCD ──────────────────────────────────────────────────
 

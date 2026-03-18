@@ -34,10 +34,16 @@ fn main() -> Result<()> {
 }
 
 fn build_engine() -> Result<RegexEngine> {
-    let defaults = config::default_rules();
+    use guardrail::config::{DefaultsProvider, DirectoryProvider, RuleProvider};
+
+    let defaults = DefaultsProvider;
+    let rules_d = DirectoryProvider { dir: config::rules_dir() };
     let user_config = config::load_user_config(&config::config_path())
         .context("loading guardrail config")?;
-    let rules = config::resolve_rules(&defaults, &user_config);
+
+    let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
+    let rules = config::resolve(&providers, &user_config)
+        .context("resolving rules")?;
     RegexEngine::new(rules).context("compiling rules")
 }
 
