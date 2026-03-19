@@ -716,6 +716,10 @@ rec {
             features = [ "derive" ];
           }
           {
+            name = "hayai";
+            packageId = "hayai";
+          }
+          {
             name = "regex";
             packageId = "regex";
           }
@@ -799,6 +803,37 @@ rec {
           "rustc-dep-of-std" = [ "nightly" "core" "alloc" "rustc-internal-api" ];
           "serde" = [ "dep:serde_core" "dep:serde" ];
         };
+      };
+      "hayai" = rec {
+        crateName = "hayai";
+        version = "0.1.0";
+        edition = "2024";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/pleme-io/hayai";
+          rev = "6474cd74b21564864448afa6545d204b6a14780d";
+          sha256 = "0alw24dbj571d4bscwn7iqrg1rhac21mdv8s029s50yxdk21677c";
+        };
+        dependencies = [
+          {
+            name = "anyhow";
+            packageId = "anyhow";
+          }
+          {
+            name = "regex";
+            packageId = "regex";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "serde_json";
+            packageId = "serde_json";
+          }
+        ];
+
       };
       "heck" = rec {
         crateName = "heck";
