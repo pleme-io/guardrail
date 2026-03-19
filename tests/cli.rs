@@ -136,6 +136,119 @@ fn aws_suite_blocks_terminate() {
         .failure();
 }
 
+// ── Multi-tool scanning ──────────────────────────────────
+
+#[test]
+fn write_with_dangerous_content_warns_not_blocks() {
+    // Write tool with "rm -rf /" in content should warn (exit 0), not block
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin("{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/evil.sh\",\"content\":\"#!/bin/bash\\nrm -rf /\"}}")
+        .assert()
+        .success(); // warns to stderr, but exit 0
+}
+
+#[test]
+fn edit_with_drop_table_warns_not_blocks() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Edit","tool_input":{"file_path":"/tmp/migration.sql","old_string":"pass","new_string":"DROP TABLE users;"}}"#)
+        .assert()
+        .success(); // downgraded to warn
+}
+
+#[test]
+fn notebook_with_os_system_warns() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"NotebookEdit","tool_input":{"new_source":"import os; os.system('rm -rf /')"}}"#)
+        .assert()
+        .success(); // downgraded to warn
+}
+
+#[test]
+fn mcp_tool_with_dangerous_command_blocks() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"mcp__kubernetes__k8s-pod-exec","tool_input":{"command":"kubectl delete namespace prod"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("block"));
+}
+
+#[test]
+fn mcp_tool_nested_dangerous_string_blocks() {
+    // MCP tool with dangerous command buried in nested JSON
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"mcp__fluxcd__apply_kubernetes_manifest","tool_input":{"manifest":"kubectl delete namespace prod","context":"staging"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("block"));
+}
+
+#[test]
+fn mcp_safe_tool_allows() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"mcp__github__get_me","tool_input":{"reason":"check auth"}}"#)
+        .assert()
+        .success();
+}
+
+#[test]
+fn read_tool_passes_through() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Read","tool_input":{"file_path":"/etc/passwd"}}"#)
+        .assert()
+        .success();
+}
+
+#[test]
+fn write_safe_content_allows() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin("{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/hello.txt\",\"content\":\"Hello world\\nThis is safe content\\n\"}}")
+        .assert()
+        .success();
+}
+
+#[test]
+fn write_then_bash_chain_blocked() {
+    // Step 1: Write a dangerous file — this records in journal
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin("{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/guardrail-test-evil.sh\",\"content\":\"#!/bin/bash\\nrm -rf /\"}}")
+        .assert()
+        .success(); // Write itself is just warned
+
+    // Step 2: Execute that file — should be blocked via journal
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"bash /tmp/guardrail-test-evil.sh"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("write-bash-chain"));
+}
+
+#[test]
+fn write_safe_then_bash_allowed() {
+    // Step 1: Write a safe file
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin("{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/guardrail-test-safe.sh\",\"content\":\"#!/bin/bash\\necho hello\"}}")
+        .assert()
+        .success();
+
+    // Step 2: Execute that file — should be allowed (not dangerous)
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"bash /tmp/guardrail-test-safe.sh"}}"#)
+        .assert()
+        .success();
+}
+
 #[test]
 fn nosql_suite_blocks_flushall() {
     let dir = setup_with_suites();

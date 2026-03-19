@@ -570,8 +570,43 @@ mod tests {
     fn prefilter_trait_used_correctly() {
         let p = PrefixPrefilter;
         // Safe command → prefilter says safe → would need wrapping
-        assert!(p.is_safe("cargo build"));
+        assert!(p.is_safe("cat README.md"));
         // Dangerous command → prefilter says not safe → no wrapping needed
         assert!(!p.is_safe("rm -rf /"));
+    }
+
+    // ── Content scanning performance ────────────────────────────
+
+    #[test]
+    fn content_scan_performance() {
+        use crate::hook;
+        use std::time::Instant;
+
+        // Simulate a large file write (1000 lines, mostly safe)
+        let mut content = String::new();
+        for i in 0..995 {
+            content.push_str(&format!("const x{i} = {i};\n"));
+        }
+        // Add a few dangerous lines
+        content.push_str("rm -rf /tmp\n");
+        content.push_str("DROP TABLE users;\n");
+        content.push_str("terraform destroy\n");
+        content.push_str("echo safe\n");
+        content.push_str("kubectl delete namespace prod\n");
+
+        let start = Instant::now();
+        let lines = hook::scan_content_lines(&content);
+        let elapsed = start.elapsed();
+
+        // Should find exactly the dangerous lines (prefilter rejects safe ones)
+        assert!(lines.len() >= 4, "expected 4+ dangerous lines, got {}", lines.len());
+
+        // Content scanning of 1000 lines should be under 100ms even in debug mode
+        // (release mode: <1ms via prefilter fast-reject of safe lines)
+        assert!(
+            elapsed.as_millis() < 100,
+            "Content scan too slow for 1000 lines: {elapsed:?}"
+        );
+        eprintln!("Content scan (1000 lines, {} dangerous): {elapsed:?}", lines.len());
     }
 }
