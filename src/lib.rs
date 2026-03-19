@@ -2,14 +2,21 @@ pub mod cache;
 pub mod config;
 pub mod engine;
 pub mod hook;
+pub mod journal;
 pub mod model;
 pub mod testing;
 
-pub use cache::{CacheStore, CompiledCache, FixedFingerprinter, Fingerprinter};
-pub use cache::{FsCache, FsFingerprinter, MemCache};
+// Re-export hayai types that guardrail consumers use
+pub use hayai::engine::{
+    ChainedNormalizer, IdentityNormalizer, Normalizer, NullPrefilter, PathNormalizer, Prefilter,
+};
+pub use hayai::cache::{CacheStore, FixedFingerprinter, Fingerprinter, MemCache};
+
+// Re-export domain types
+pub use cache::{FsCache, FsFingerprinter};
 pub use config::{DefaultsProvider, DirectoryProvider, MockProvider, RuleProvider};
 pub use engine::{
-    IdentityNormalizer, NixStoreNormalizer, Normalizer, NullPrefilter, PrefixPrefilter, Prefilter,
-    RegexEngine, RuleEngine,
+    NixStoreNormalizer, PrefixPrefilter, ProductionNormalizer, RegexEngine, RuleEngine,
+    SqlCommentStripper,
 };
 pub use model::{Category, Decision, GuardrailConfig, Rule, RuleBuilder, Severity};

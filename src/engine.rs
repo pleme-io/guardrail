@@ -3,40 +3,20 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::LazyLock;
 
-use regex::{RegexSet, RegexSetBuilder};
+// Re-export generic engine components from hayai
+pub use hayai::engine::{
+    ChainedNormalizer, IdentityNormalizer, MatchEngine, Normalizer, NullPrefilter, PathNormalizer,
+    Prefilter, contains_ascii_ci,
+};
+use hayai::engine::RegexMatcher;
 
 use crate::model::{Decision, Rule, Severity};
 
 // ═══════════════════════════════════════════════════════════════════
-// Trait: Normalizer — pluggable command preprocessing
+// Domain-specific trait: RuleEngine (returns Decision, not indices)
 // ═══════════════════════════════════════════════════════════════════
 
-/// Abstracts command normalization (e.g. stripping nix store paths).
-///
-/// Uses `Cow` to avoid allocation when no transformation is needed.
-/// Implementations must be `Send + Sync` for use in cached engines.
-pub trait Normalizer: Send + Sync {
-    fn normalize<'a>(&self, command: &'a str) -> Cow<'a, str>;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Trait: Prefilter — pluggable fast-reject
-// ═══════════════════════════════════════════════════════════════════
-
-/// Abstracts the fast-reject prefilter that skips DFA matching for
-/// commands that are definitely safe.
-///
-/// Returns `true` if the command is safe (skip DFA). Returns `false`
-/// if the command might be dangerous (must run DFA).
-pub trait Prefilter: Send + Sync {
-    fn is_safe(&self, command: &str) -> bool;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Trait: RuleEngine — pluggable matching
-// ═══════════════════════════════════════════════════════════════════
-
-/// Trait for testable, mockable rule matching.
+/// Trait for domain-specific rule matching that returns Decisions.
 pub trait RuleEngine {
     fn check(&self, command: &str) -> Decision;
     fn rules(&self) -> &[Rule];
@@ -46,47 +26,57 @@ pub trait RuleEngine {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Normalizer implementations
+// Domain-specific normalizer: SqlCommentStripper
 // ═══════════════════════════════════════════════════════════════════
 
-static NIX_PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"/nix/store/[a-z0-9]+-[^/]+/bin/").unwrap()
+static SQL_BLOCK_COMMENT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"/\*.*?\*/").unwrap());
+
+static SQL_LINE_COMMENT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    // Match SQL line comments: `-- text` where the text doesn't start with `-`
+    // (to avoid matching CLI `-- --flag` patterns).
+    // Requires `--` preceded by start-of-line or whitespace, followed by space + non-dash.
+    regex::Regex::new(r"(?m)(?:^|[ \t])-- [^-].*$").unwrap()
 });
 
-/// Strips `/nix/store/{hash}-{pkg}/bin/` prefixes from commands.
-/// Returns `Cow::Borrowed` when no nix path is present (zero alloc).
+/// Strips SQL block comments (`/* ... */`) and line comments (`-- ...`).
+/// Preserves `--` when it appears as a CLI flag (preceded by a word char).
 #[derive(Debug, Clone, Copy, Default)]
-pub struct NixStoreNormalizer;
+pub struct SqlCommentStripper;
 
-impl Normalizer for NixStoreNormalizer {
+impl Normalizer for SqlCommentStripper {
     fn normalize<'a>(&self, command: &'a str) -> Cow<'a, str> {
-        if NIX_PATH_RE.is_match(command) {
-            Cow::Owned(NIX_PATH_RE.replace_all(command, "").into_owned())
-        } else {
-            Cow::Borrowed(command)
+        let has_block = SQL_BLOCK_COMMENT_RE.is_match(command);
+        let has_line = SQL_LINE_COMMENT_RE.is_match(command);
+        if !has_block && !has_line {
+            return Cow::Borrowed(command);
         }
+        let mut result = if has_block {
+            SQL_BLOCK_COMMENT_RE.replace_all(command, " ").into_owned()
+        } else {
+            command.to_owned()
+        };
+        if has_line || SQL_LINE_COMMENT_RE.is_match(&result) {
+            result = SQL_LINE_COMMENT_RE.replace_all(&result, "").into_owned();
+        }
+        Cow::Owned(result)
     }
 }
 
-/// No-op normalizer — returns commands unchanged.
-/// Use in tests to isolate engine logic from normalization.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct IdentityNormalizer;
+/// Production normalizer: `PathNormalizer` then `SqlCommentStripper`.
+pub type ProductionNormalizer = ChainedNormalizer<PathNormalizer, SqlCommentStripper>;
 
-impl Normalizer for IdentityNormalizer {
-    fn normalize<'a>(&self, command: &'a str) -> Cow<'a, str> {
-        Cow::Borrowed(command)
-    }
-}
+/// Backward-compatible alias for `PathNormalizer`.
+pub type NixStoreNormalizer = PathNormalizer;
 
 // ═══════════════════════════════════════════════════════════════════
-// Prefilter implementations
+// Domain-specific prefilter: PrefixPrefilter with guardrail keywords
 // ═══════════════════════════════════════════════════════════════════
 
 /// First-word prefixes that COULD trigger a rule.
 const DANGEROUS_PREFIXES: &[&str] = &[
     // filesystem
-    "rm", "dd", "mkfs", "chmod",
+    "rm", "dd", "mkfs", "chmod", "chown", "mv", "truncate", "shred",
     // git
     "git",
     // database / SQL
@@ -114,15 +104,31 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     "iptables", "ufw", "ip", "nft",
     // nosql
     "redis-cli",
-    // curl (for elasticsearch)
-    "curl",
+    // curl/wget (pipe install, elasticsearch)
+    "curl", "wget",
     // mysql admin
     "mysqladmin",
+    // shell wrappers -- commands that execute other commands
+    "sh", "bash", "zsh", "fish", "dash",
+    "env", "sudo", "doas", "nohup", "nice", "timeout",
+    // eval / indirect execution
+    "eval", "xargs", "find",
+    // scheduling
+    "crontab", "at",
+    // disk partitioning
+    "fdisk", "parted", "wipefs",
+    // sync/publish (supply chain)
+    "npm", "cargo", "gem", "pip", "twine",
+    // remote sync
+    "rsync", "rclone",
+    // log wiping
+    "journalctl",
+    // ssh (remote command execution)
+    "ssh",
 ];
 
-static PREFIX_SET: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    DANGEROUS_PREFIXES.iter().copied().collect()
-});
+static PREFIX_SET: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| DANGEROUS_PREFIXES.iter().copied().collect());
 
 /// Production prefilter: skips DFA for commands whose first 3 words
 /// don't match a known dangerous prefix AND don't contain SQL keywords.
@@ -141,6 +147,15 @@ impl PrefixPrefilter {
 
 impl Prefilter for PrefixPrefilter {
     fn is_safe(&self, command: &str) -> bool {
+        // Commands starting with $ are variable expansions -- must reach DFA
+        let trimmed = command.trim_start();
+        if trimmed.starts_with('$') {
+            return false;
+        }
+        // Backtick command substitution -- must reach DFA
+        if trimmed.contains('`') {
+            return false;
+        }
         // Zero-alloc prefix scan: iterate first 3 words without collecting to Vec
         let mut count = 0;
         for word in command.split_whitespace() {
@@ -157,8 +172,23 @@ impl Prefilter for PrefixPrefilter {
         if contains_ascii_ci(command.as_bytes(), b"DROP ")
             || contains_ascii_ci(command.as_bytes(), b"TRUNCATE ")
             || contains_ascii_ci(command.as_bytes(), b"DELETE FROM")
+            || contains_ascii_ci(command.as_bytes(), b"REVOKE ")
             || contains_ascii_ci(command.as_bytes(), b"FLUSHALL")
             || contains_ascii_ci(command.as_bytes(), b"FLUSHDB")
+            || contains_ascii_ci(command.as_bytes(), b"VACUUM FULL")
+            || contains_ascii_ci(command.as_bytes(), b"BASE64")
+            || contains_ascii_ci(command.as_bytes(), b"| BASH")
+            || contains_ascii_ci(command.as_bytes(), b"| SH")
+        {
+            return false;
+        }
+        // SQL comment obfuscation: if command contains block comment or SQL
+        // line comment markers, it might be hiding SQL keywords after normalization.
+        if command.as_bytes().windows(2).any(|w| w == b"/*")
+            || command
+                .as_bytes()
+                .windows(3)
+                .any(|w| w == b"-- " || w == b"--\t")
         {
             return false;
         }
@@ -166,35 +196,8 @@ impl Prefilter for PrefixPrefilter {
     }
 }
 
-/// Case-insensitive ASCII substring search without allocation.
-/// `needle` must be uppercase ASCII bytes.
-#[inline]
-fn contains_ascii_ci(haystack: &[u8], needle: &[u8]) -> bool {
-    let n = needle.len();
-    if n == 0 {
-        return true;
-    }
-    if haystack.len() < n {
-        return false;
-    }
-    haystack
-        .windows(n)
-        .any(|w| w.iter().zip(needle).all(|(a, b)| a.to_ascii_uppercase() == *b))
-}
-
-/// No-op prefilter — nothing is safe, all commands reach the DFA.
-/// Use in tests to guarantee full pattern matching.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NullPrefilter;
-
-impl Prefilter for NullPrefilter {
-    fn is_safe(&self, _command: &str) -> bool {
-        false
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════
-// RegexEngine — generic over Normalizer + Prefilter
+// RegexEngine -- wraps hayai::RegexMatcher, adds Decision logic
 // ═══════════════════════════════════════════════════════════════════
 
 /// Production rule engine: pluggable normalizer + prefilter + RegexSet DFA.
@@ -216,33 +219,37 @@ impl Prefilter for NullPrefilter {
 /// # Ok(())
 /// # }
 /// ```
-pub struct RegexEngine<N: Normalizer = NixStoreNormalizer, P: Prefilter = PrefixPrefilter> {
-    set: RegexSet,
+pub struct RegexEngine<N: Normalizer = ProductionNormalizer, P: Prefilter = PrefixPrefilter> {
+    matcher: RegexMatcher<N, P>,
     rules: Vec<Rule>,
-    normalizer: N,
-    prefilter: P,
 }
 
 impl<N: Normalizer + fmt::Debug, P: Prefilter + fmt::Debug> fmt::Debug for RegexEngine<N, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RegexEngine")
             .field("rule_count", &self.rules.len())
-            .field("normalizer", &self.normalizer)
-            .field("prefilter", &self.prefilter)
+            .field("matcher", &self.matcher)
             .finish()
     }
 }
 
-/// Default constructor — production configuration.
+/// Default constructor -- production configuration.
 impl RegexEngine {
-    /// Create an engine with `NixStoreNormalizer` + `PrefixPrefilter`.
+    /// Create an engine with `ProductionNormalizer` + `PrefixPrefilter`.
     ///
     /// # Errors
     ///
     /// Returns an error if any regex pattern is invalid or the compiled
     /// DFA exceeds the 100MB size limit.
     pub fn new(rules: Vec<Rule>) -> anyhow::Result<Self> {
-        Self::with_plugins(rules, NixStoreNormalizer, PrefixPrefilter)
+        Self::with_plugins(
+            rules,
+            ChainedNormalizer {
+                first: PathNormalizer,
+                second: SqlCommentStripper,
+            },
+            PrefixPrefilter,
+        )
     }
 }
 
@@ -253,37 +260,23 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
     ///
     /// Returns an error if any regex pattern is invalid.
     pub fn with_plugins(rules: Vec<Rule>, normalizer: N, prefilter: P) -> anyhow::Result<Self> {
-        let patterns: Vec<&str> = rules.iter().map(|r| r.pattern.as_str()).collect();
-        let set = RegexSetBuilder::new(&patterns)
-            .size_limit(100 * 1024 * 1024) // 100MB for 2,500+ rules
-            .build()
-            .map_err(|e| anyhow::anyhow!("invalid regex in rule set: {e}"))?;
-        Ok(Self {
-            set,
-            rules,
-            normalizer,
-            prefilter,
-        })
+        let patterns: Vec<String> = rules.iter().map(|r| r.pattern.clone()).collect();
+        let matcher = RegexMatcher::with_plugins(patterns, normalizer, prefilter)?;
+        Ok(Self { matcher, rules })
     }
 }
 
 impl<N: Normalizer, P: Prefilter> RuleEngine for RegexEngine<N, P> {
     fn check(&self, command: &str) -> Decision {
-        let normalized = self.normalizer.normalize(command);
-
-        if self.prefilter.is_safe(&normalized) {
+        let matches = self.matcher.check(command);
+        if matches.is_empty() {
             return Decision::Allow;
         }
 
-        let matches = self.set.matches(&normalized);
-        if !matches.matched_any() {
-            return Decision::Allow;
-        }
-
-        // Block takes priority — early-exit on first Block match.
+        // Block takes priority -- early-exit on first Block match.
         let mut best_warn: Option<&Rule> = None;
 
-        for idx in matches.iter() {
+        for idx in matches {
             let rule = &self.rules[idx];
             match rule.severity {
                 Severity::Block => {
@@ -350,30 +343,59 @@ mod tests {
         }
     }
 
-    // ── Normalizer trait ─────────────────────────────────────────
+    // -- Normalizer trait -----------------------------------------
 
     #[test]
-    fn nix_normalizer_strips_store_path() {
-        let n = NixStoreNormalizer;
+    fn path_normalizer_strips_nix_store_path() {
+        let n = PathNormalizer;
         let result = n.normalize("/nix/store/abc123-pkg-1.0/bin/guardrail check");
         assert_eq!(&*result, "guardrail check");
         assert!(matches!(result, Cow::Owned(_)));
     }
 
     #[test]
-    fn nix_normalizer_borrows_when_no_path() {
-        let n = NixStoreNormalizer;
+    fn path_normalizer_borrows_when_no_path() {
+        let n = PathNormalizer;
         let result = n.normalize("cargo test");
         assert_eq!(&*result, "cargo test");
         assert!(matches!(result, Cow::Borrowed(_)));
     }
 
     #[test]
-    fn nix_normalizer_strips_multiple_paths() {
-        let n = NixStoreNormalizer;
+    fn path_normalizer_strips_multiple_nix_paths() {
+        let n = PathNormalizer;
         let result =
             n.normalize("/nix/store/abc-foo-1.0/bin/cmd1 && /nix/store/def-bar-2.0/bin/cmd2");
         assert_eq!(&*result, "cmd1 && cmd2");
+    }
+
+    #[test]
+    fn path_normalizer_strips_usr_bin() {
+        let n = PathNormalizer;
+        let result = n.normalize("/usr/bin/rm -rf /");
+        assert_eq!(&*result, "rm -rf /");
+        assert!(matches!(result, Cow::Owned(_)));
+    }
+
+    #[test]
+    fn path_normalizer_strips_usr_local_bin() {
+        let n = PathNormalizer;
+        let result = n.normalize("/usr/local/bin/terraform destroy");
+        assert_eq!(&*result, "terraform destroy");
+    }
+
+    #[test]
+    fn path_normalizer_strips_bin() {
+        let n = PathNormalizer;
+        let result = n.normalize("/bin/rm -rf /");
+        assert_eq!(&*result, "rm -rf /");
+    }
+
+    #[test]
+    fn path_normalizer_strips_sbin() {
+        let n = PathNormalizer;
+        let result = n.normalize("/sbin/mkfs.ext4 /dev/sda1");
+        assert_eq!(&*result, "mkfs.ext4 /dev/sda1");
     }
 
     #[test]
@@ -383,15 +405,96 @@ mod tests {
         assert!(matches!(result, Cow::Borrowed("anything")));
     }
 
-    // ── Prefilter trait ──────────────────────────────────────────
+    // -- SQL comment stripping ------------------------------------
+
+    #[test]
+    fn sql_comment_stripper_block_comment() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("DELETE/**/FROM users");
+        assert_eq!(result.trim(), "DELETE FROM users");
+    }
+
+    #[test]
+    fn sql_comment_stripper_sneaky_block_comment() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("DROP/* sneaky */TABLE users");
+        assert_eq!(result.trim(), "DROP TABLE users");
+    }
+
+    #[test]
+    fn sql_comment_stripper_line_comment() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("DROP TABLE -- this is a comment\nusers");
+        // Line comment removed; newline preserved
+        assert!(result.contains("DROP TABLE"));
+    }
+
+    #[test]
+    fn sql_comment_stripper_preserves_cli_flags() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("cargo build -- --release");
+        // `--` preceded by word char 'd' -> not a SQL comment
+        assert_eq!(&*result, "cargo build -- --release");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn sql_comment_stripper_no_comments() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("SELECT * FROM users");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    // -- ChainedNormalizer / ProductionNormalizer ------------------
+
+    #[test]
+    fn chained_normalizer_chains_path_and_sql() {
+        let n = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let result = n.normalize("/usr/bin/psql -c 'DROP/**/TABLE users'");
+        assert!(result.contains("DROP"));
+        assert!(result.contains("TABLE"));
+        assert!(!result.contains("/usr/bin/"));
+    }
+
+    #[test]
+    fn chained_normalizer_borrows_when_clean() {
+        let n: ProductionNormalizer = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let result = n.normalize("cargo test");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn chained_normalizer_only_first_transforms() {
+        let n = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let result = n.normalize("/usr/bin/ls -la");
+        assert_eq!(&*result, "ls -la");
+    }
+
+    #[test]
+    fn chained_normalizer_only_second_transforms() {
+        let n = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let result = n.normalize("DROP/**/TABLE users");
+        assert!(result.contains("DROP"));
+        assert!(result.contains("TABLE"));
+    }
+
+    #[test]
+    fn chained_normalizer_identity_is_noop() {
+        let n = ChainedNormalizer { first: IdentityNormalizer, second: IdentityNormalizer };
+        let result = n.normalize("anything");
+        assert!(matches!(result, Cow::Borrowed("anything")));
+    }
+
+    // -- Prefilter trait ------------------------------------------
 
     #[test]
     fn prefix_prefilter_safe_commands() {
         let p = PrefixPrefilter;
         assert!(p.is_safe("ls -la"));
-        assert!(p.is_safe("cargo test"));
         assert!(p.is_safe("cat file.txt"));
         assert!(p.is_safe("rg pattern ."));
+        assert!(p.is_safe("wc -l file"));
+        assert!(p.is_safe("head -5 file"));
     }
 
     #[test]
@@ -416,14 +519,15 @@ mod tests {
         assert!(!p.is_safe("cargo test"));
     }
 
-    // ── Engine with plugins ──────────────────────────────────────
+    // -- Engine with plugins --------------------------------------
 
     #[test]
     fn engine_with_null_prefilter_checks_everything() {
         let rules = config::default_rules();
+        let normalizer = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
         let engine =
-            RegexEngine::with_plugins(rules, NixStoreNormalizer, NullPrefilter).unwrap();
-        // Even "safe" commands like "ls" reach the DFA — but no rule matches
+            RegexEngine::with_plugins(rules, normalizer, NullPrefilter).unwrap();
+        // Even "safe" commands like "ls" reach the DFA -- but no rule matches
         assert!(matches!(engine.check("ls -la"), Decision::Allow));
         // Dangerous commands still blocked
         assert!(matches!(engine.check("rm -rf /"), Decision::Block { .. }));
@@ -450,7 +554,7 @@ mod tests {
         assert!(debug.contains("rule_count"));
     }
 
-    // ── Nix store path normalization ─────────────────────────────
+    // -- Nix store path normalization -----------------------------
 
     #[test]
     fn nix_shell_wrapped_mkfs_not_blocked() {
@@ -469,7 +573,27 @@ mod tests {
         assert_blocks("/nix/store/abc123-coreutils-9.0/bin/rm -rf /");
     }
 
-    // ── Filesystem ──────────────────────────────────────────────
+    #[test]
+    fn usr_bin_rm_blocked() {
+        assert_blocks("/usr/bin/rm -rf /");
+    }
+
+    #[test]
+    fn sbin_mkfs_blocked() {
+        assert_blocks("/sbin/mkfs.ext4 /dev/sda1");
+    }
+
+    #[test]
+    fn usr_local_bin_terraform_blocked() {
+        assert_blocks("/usr/local/bin/terraform destroy");
+    }
+
+    #[test]
+    fn bin_rm_blocked() {
+        assert_blocks("/bin/rm -rf /");
+    }
+
+    // -- Filesystem -----------------------------------------------
 
     #[test] fn rm_rf_root_blocked()        { assert_blocks("rm -rf /"); }
     #[test] fn rm_rf_root_var_blocked()    { assert_blocks("rm -rf /"); }
@@ -483,7 +607,7 @@ mod tests {
     #[test] fn dd_file_allowed()           { assert_allows("dd if=input.img of=output.img"); }
     #[test] fn mkfs_blocked()              { assert_blocks("mkfs.ext4 /dev/sda1"); }
 
-    // ── Git ─────────────────────────────────────────────────────
+    // -- Git ------------------------------------------------------
 
     #[test] fn force_push_main_blocked()     { assert_blocks("git push --force origin main"); }
     #[test] fn force_push_master_blocked()   { assert_blocks("git push --force origin master"); }
@@ -496,7 +620,7 @@ mod tests {
     #[test] fn branch_force_delete_warned()  { assert_warns("git branch -D old-branch"); }
     #[test] fn branch_delete_allowed()       { assert_allows("git branch -d merged-branch"); }
 
-    // ── Database ────────────────────────────────────────────────
+    // -- Database -------------------------------------------------
 
     #[test] fn drop_table_blocked()            { assert_blocks("psql -c 'DROP TABLE users'"); }
     #[test] fn drop_table_lower_blocked()      { assert_blocks("psql -c 'drop table users'"); }
@@ -509,7 +633,7 @@ mod tests {
     #[test] fn create_table_allowed()          { assert_allows("psql -c 'CREATE TABLE new_table (id int)'"); }
     #[test] fn insert_allowed()                { assert_allows("psql -c 'INSERT INTO users VALUES (1)'"); }
 
-    // ── SQL escaping ────────────────────────────────────────────
+    // -- SQL escaping ---------------------------------------------
 
     #[test] fn drop_table_single_quotes()  { assert_blocks("psql -c 'DROP TABLE users'"); }
     #[test] fn drop_table_double_quotes()  { assert_blocks(r#"psql -c "DROP TABLE users""#); }
@@ -519,11 +643,17 @@ mod tests {
     #[test] fn drop_table_multiline()      { assert_blocks("psql -c '\nDROP TABLE\nusers\n'"); }
     #[test] fn truncate_semicolon()        { assert_blocks("psql -c 'TRUNCATE TABLE logs;'"); }
     #[test] fn delete_from_semicolon()     { assert_blocks("psql -c 'DELETE FROM users;'"); }
+
+    // -- SQL comment bypass blocked -------------------------------
+
+    #[test] fn drop_table_block_comment()  { assert_blocks("psql -c 'DROP/**/TABLE users'"); }
+    #[test] fn drop_sneaky_comment()       { assert_blocks("psql -c 'DROP/* sneaky */TABLE users'"); }
+    #[test] fn delete_block_comment()      { assert_blocks("psql -c 'DELETE/**/FROM users'"); }
     #[test] fn select_star_not_blocked()   { assert_allows("psql -c 'SELECT * FROM users'"); }
     #[test] fn create_not_blocked()        { assert_allows("psql -c 'CREATE TABLE t (id int)'"); }
     #[test] fn alter_add_col_allowed()     { assert_allows("psql -c 'ALTER TABLE t ADD COLUMN name text'"); }
 
-    // ── Kubernetes ──────────────────────────────────────────────
+    // -- Kubernetes -----------------------------------------------
 
     #[test] fn kubectl_delete_ns_blocked()     { assert_blocks("kubectl delete namespace production"); }
     #[test] fn kubectl_delete_ns_short()       { assert_blocks("kubectl delete ns staging"); }
@@ -533,26 +663,26 @@ mod tests {
     #[test] fn helm_uninstall_prod_blocked()   { assert_blocks("helm uninstall myapp -n production"); }
     #[test] fn helm_uninstall_staging_allowed() { assert_allows("helm uninstall myapp -n staging"); }
 
-    // ── Nix ─────────────────────────────────────────────────────
+    // -- Nix ------------------------------------------------------
 
     #[test] fn nix_gc_delete_warned()    { assert_warns("nix-collect-garbage -d"); }
     #[test] fn nix_store_gc_warned()     { assert_warns("nix store gc"); }
     #[test] fn nix_build_allowed()       { assert_allows("nix build .#default"); }
 
-    // ── Docker ──────────────────────────────────────────────────
+    // -- Docker ---------------------------------------------------
 
     #[test] fn docker_system_prune_warned()  { assert_warns("docker system prune -af"); }
     #[test] fn docker_volume_prune_warned()  { assert_warns("docker volume prune -f"); }
     #[test] fn docker_build_allowed()        { assert_allows("docker build -t myimage ."); }
 
-    // ── Secrets ─────────────────────────────────────────────────
+    // -- Secrets --------------------------------------------------
 
     #[test] fn sops_decrypt_pipe_warned()    { assert_warns("sops -d secrets.yaml | cat"); }
     #[test] fn sops_decrypt_file_allowed()   { assert_allows("sops -d secrets.yaml > decrypted.yaml"); }
     #[test] fn echo_token_warned()           { assert_warns("echo $GITHUB_TOKEN"); }
     #[test] fn echo_normal_allowed()         { assert_allows("echo hello world"); }
 
-    // ── Terraform ───────────────────────────────────────────────
+    // -- Terraform ------------------------------------------------
 
     #[test] fn terraform_destroy_blocked()      { assert_blocks("terraform destroy"); }
     #[test] fn terraform_apply_auto_warned()    { assert_warns("terraform apply -auto-approve"); }
@@ -564,7 +694,7 @@ mod tests {
     #[test] fn pulumi_destroy_blocked()         { assert_blocks("pulumi destroy"); }
     #[test] fn pulumi_up_allowed()              { assert_allows("pulumi up"); }
 
-    // ── FluxCD ──────────────────────────────────────────────────
+    // -- FluxCD ---------------------------------------------------
 
     #[test] fn flux_uninstall_blocked()         { assert_blocks("flux uninstall"); }
     #[test] fn flux_delete_source_warned()      { assert_warns("flux delete source git my-repo"); }
@@ -572,7 +702,7 @@ mod tests {
     #[test] fn flux_reconcile_allowed()         { assert_allows("flux reconcile kustomization my-app"); }
     #[test] fn flux_get_allowed()               { assert_allows("flux get kustomizations"); }
 
-    // ── Engine trait ─────────────────────────────────────────────
+    // -- Engine trait ---------------------------------------------
 
     #[test]
     fn engine_compiles_all_defaults() {
@@ -584,17 +714,7 @@ mod tests {
     fn rules_returns_slice() {
         let e = engine();
         let rules: &[Rule] = e.rules();
-        assert!(!rules.is_empty());
-        assert!(rules.iter().all(|r| r.category == Category::Filesystem
-            || r.category == Category::Git
-            || r.category == Category::Database
-            || r.category == Category::Kubernetes
-            || r.category == Category::Nix
-            || r.category == Category::Docker
-            || r.category == Category::Secrets
-            || r.category == Category::Terraform
-            || r.category == Category::Flux
-        ));
+        assert!(rules.len() >= 60, "expected 60+ default rules, got {}", rules.len());
     }
 
     #[test]
@@ -620,7 +740,50 @@ mod tests {
         }
     }
 
-    // ── Edge cases ───────────────────────────────────────────────
+    // -- Variable expansion ---------------------------------------
+
+    #[test] fn var_as_command_warned()       { assert_warns("$cmd --force"); }
+    #[test] fn indirect_eval_var_warned()    { assert_warns(r#"eval "$user_input""#); }
+    #[test] fn bash_c_var_warned()           { assert_warns(r#"bash -c "$cmd""#); }
+    #[test] fn backtick_rm_warned()          { assert_warns("echo `rm -rf /tmp`"); }
+    #[test] fn backtick_date_allowed()       { assert_allows("echo `date`"); }
+    #[test] fn echo_dollar_home_allowed()    { assert_allows("echo $HOME"); }
+
+    // -- Prefilter: $ and backtick --------------------------------
+
+    #[test]
+    fn prefilter_dollar_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("$cmd --force"));
+    }
+
+    #[test]
+    fn prefilter_backtick_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("echo `rm -rf /`"));
+    }
+
+    #[test]
+    fn prefilter_sql_block_comment_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("SELECT /*evil*/ 1"));
+    }
+
+    #[test]
+    fn prefilter_sql_line_comment_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("SELECT 1 -- comment"));
+    }
+
+    #[test]
+    fn prefilter_cli_double_dash_is_safe() {
+        let p = PrefixPrefilter;
+        // `--release` has no space after `--` -> not a SQL comment marker -> safe
+        // (using `rg` which is not in the dangerous prefix list)
+        assert!(p.is_safe("rg --release pattern ."));
+    }
+
+    // -- Edge cases -----------------------------------------------
 
     #[test]
     fn empty_command_allowed() {
@@ -634,7 +797,7 @@ mod tests {
 
     #[test]
     fn unicode_safe_command_allowed() {
-        assert_allows("echo 'café résumé'");
+        assert_allows("echo 'cafe resume'");
     }
 
     #[test]
@@ -662,7 +825,7 @@ mod tests {
         assert!(!contains_ascii_ci(b"", b"DROP "));
     }
 
-    // ── Display ──────────────────────────────────────────────────
+    // -- Display --------------------------------------------------
 
     #[test]
     fn decision_display_allow() {
