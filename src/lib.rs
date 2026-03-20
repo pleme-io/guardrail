@@ -1,3 +1,4 @@
+pub mod biometric;
 pub mod cache;
 pub mod config;
 pub mod engine;

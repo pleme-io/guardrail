@@ -165,7 +165,17 @@ fn record_write_journal(
 }
 
 /// Emit a block decision JSON to stdout and exit with code 1.
+///
+/// On macOS with a TTY, prompts for Touch ID authentication first.
+/// If the user authenticates successfully, the block is bypassed and
+/// the command is allowed to proceed.
 fn emit_block(rule: &str, message: &str) -> ! {
+    // Attempt biometric bypass before blocking
+    if guardrail::biometric::authenticate(rule, message) {
+        // Authenticated — allow the command through
+        process::exit(0);
+    }
+
     let response = serde_json::json!({
         "decision": "block",
         "reason": format!("guardrail [{rule}]: {message}")
