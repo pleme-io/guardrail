@@ -116,34 +116,24 @@ impl WriteJournal {
 /// or if it follows a shell interpreter prefix.
 #[must_use]
 pub fn extract_executed_paths(command: &str) -> Vec<String> {
-    let mut paths = Vec::new();
     let words: Vec<&str> = command.split_whitespace().collect();
+    let mut paths = Vec::new();
 
-    let mut i = 0;
-    while i < words.len() {
-        let word = words[i];
+    for (i, word) in words.iter().enumerate() {
         let basename = Path::new(word)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(word);
 
-        // Check if this word is a shell interpreter
         if SHELL_INTERPRETERS.contains(&basename) {
-            // Next non-flag argument is the script path
-            for next in &words[i + 1..] {
-                if !next.starts_with('-') {
-                    paths.push((*next).to_owned());
-                    break;
-                }
+            if let Some(script) = words[i + 1..].iter().find(|w| !w.starts_with('-')) {
+                paths.push((*script).to_owned());
             }
         }
 
-        // Check if this word is a direct script path
         if is_path_like(word) && has_script_extension(word) {
-            paths.push(word.to_owned());
+            paths.push((*word).to_owned());
         }
-
-        i += 1;
     }
 
     paths.sort();
