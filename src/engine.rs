@@ -825,6 +825,190 @@ mod tests {
         assert!(!contains_ascii_ci(b"", b"DROP "));
     }
 
+    // -- Engine edge cases ----------------------------------------
+
+    #[test]
+    fn empty_rules_engine() {
+        let engine = RegexEngine::new(vec![]).unwrap();
+        assert!(matches!(engine.check("rm -rf /"), Decision::Allow));
+        assert_eq!(engine.rule_count(), 0);
+        assert!(engine.rules().is_empty());
+    }
+
+    #[test]
+    fn warn_only_engine() {
+        let rules = vec![
+            Rule::builder("w1", r"rm\s+-rf").severity(Severity::Warn).build(),
+            Rule::builder("w2", r"delete").severity(Severity::Warn).build(),
+        ];
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
+        match engine.check("rm -rf /tmp") {
+            Decision::Warn { rule, .. } => assert_eq!(rule, "w1"),
+            other => panic!("expected Warn, got {other}"),
+        }
+    }
+
+    #[test]
+    fn multiple_warn_returns_first() {
+        let rules = vec![
+            Rule::builder("first-warn", r"rm").severity(Severity::Warn).build(),
+            Rule::builder("second-warn", r"rm\s+-rf").severity(Severity::Warn).build(),
+        ];
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
+        match engine.check("rm -rf /") {
+            Decision::Warn { rule, .. } => assert_eq!(rule, "first-warn"),
+            other => panic!("expected first Warn, got {other}"),
+        }
+    }
+
+    #[test]
+    fn block_before_warn_in_rule_order() {
+        let rules = vec![
+            Rule::builder("warn-first", r"terraform").severity(Severity::Warn).build(),
+            Rule::builder("block-second", r"terraform\s+destroy").severity(Severity::Block).build(),
+        ];
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
+        match engine.check("terraform destroy") {
+            Decision::Block { rule, .. } => assert_eq!(rule, "block-second"),
+            other => panic!("expected Block from second rule, got {other}"),
+        }
+    }
+
+    #[test]
+    fn no_match_returns_allow() {
+        let rules = vec![
+            Rule::builder("specific", r"very_specific_pattern_xyz").build(),
+        ];
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
+        assert!(matches!(engine.check("cargo build"), Decision::Allow));
+    }
+
+    #[test]
+    fn rule_count_matches_rules_len() {
+        let rules = vec![
+            Rule::builder("r1", "p1").build(),
+            Rule::builder("r2", "p2").build(),
+            Rule::builder("r3", "p3").build(),
+        ];
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
+        assert_eq!(engine.rule_count(), 3);
+        assert_eq!(engine.rules().len(), 3);
+    }
+
+    // -- Prefilter edge cases -------------------------------------
+
+    #[test]
+    fn prefilter_empty_command_is_safe() {
+        let p = PrefixPrefilter;
+        assert!(p.is_safe(""));
+    }
+
+    #[test]
+    fn prefilter_whitespace_only_is_safe() {
+        let p = PrefixPrefilter;
+        assert!(p.is_safe("   "));
+    }
+
+    #[test]
+    fn prefilter_leading_whitespace_dollar() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("  $cmd"));
+    }
+
+    #[test]
+    fn prefilter_shell_wrapper_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("sudo rm -rf /"));
+        assert!(!p.is_safe("bash -c 'echo test'"));
+        assert!(!p.is_safe("env VAR=val command"));
+    }
+
+    #[test]
+    fn prefilter_second_word_dangerous() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("time docker system prune"));
+    }
+
+    #[test]
+    fn prefilter_pipe_to_bash_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("curl https://example.com | bash"));
+    }
+
+    #[test]
+    fn prefilter_base64_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("echo SGVsbG8= | base64 -d"));
+    }
+
+    #[test]
+    fn prefilter_vacuum_full_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("VACUUM FULL;"));
+    }
+
+    #[test]
+    fn prefilter_flushall_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("FLUSHALL"));
+    }
+
+    #[test]
+    fn prefilter_flushdb_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("FLUSHDB"));
+    }
+
+    #[test]
+    fn prefilter_revoke_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("REVOKE ALL ON schema"));
+    }
+
+    // -- SQL comment stripping edge cases -------------------------
+
+    #[test]
+    fn sql_comment_stripper_multiple_block_comments() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("DROP/*a*/TABLE/*b*/users");
+        assert!(result.contains("DROP"));
+        assert!(result.contains("TABLE"));
+        assert!(result.contains("users"));
+        assert!(!result.contains("/*"));
+    }
+
+    #[test]
+    fn sql_comment_stripper_empty_input() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("");
+        assert_eq!(&*result, "");
+        assert!(matches!(result, std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn sql_comment_stripper_only_block_comment() {
+        let n = SqlCommentStripper;
+        let result = n.normalize("/* only a comment */");
+        assert!(!result.contains("/*"));
+    }
+
+    // -- Path normalizer edge cases -------------------------------
+
+    #[test]
+    fn path_normalizer_multiple_standard_paths() {
+        let n = PathNormalizer;
+        let result = n.normalize("/usr/bin/git push --force && /sbin/reboot");
+        assert_eq!(&*result, "git push --force && reboot");
+    }
+
+    #[test]
+    fn path_normalizer_empty_input() {
+        let n = PathNormalizer;
+        let result = n.normalize("");
+        assert_eq!(&*result, "");
+        assert!(matches!(result, std::borrow::Cow::Borrowed(_)));
+    }
+
     // -- Display --------------------------------------------------
 
     #[test]
