@@ -13,6 +13,7 @@ use std::io::IsTerminal;
 /// Returns `true` if the user successfully authenticated, `false` otherwise.
 /// Always returns `false` on non-macOS platforms or when stdin is not a TTY
 /// (e.g. when running in a non-interactive pipe).
+#[must_use]
 pub fn authenticate(rule: &str, message: &str) -> bool {
     // Only attempt biometric auth when running interactively
     if !std::io::stderr().is_terminal() {

@@ -156,16 +156,13 @@ impl Prefilter for PrefixPrefilter {
         if trimmed.contains('`') {
             return false;
         }
-        // Zero-alloc prefix scan: iterate first 3 words without collecting to Vec
-        let mut count = 0;
-        for word in command.split_whitespace() {
+        for (count, word) in command.split_whitespace().enumerate() {
             if count >= 3 {
                 break;
             }
             if PREFIX_SET.contains(word) || PREFIX_SET.iter().any(|p| word.starts_with(p)) {
                 return false;
             }
-            count += 1;
         }
         // Zero-alloc SQL keyword scan: byte-level case-insensitive search
         // avoids the String allocation of command.to_uppercase()
@@ -200,7 +197,7 @@ impl Prefilter for PrefixPrefilter {
 // RegexEngine -- wraps hayai::RegexMatcher, adds Decision logic
 // ═══════════════════════════════════════════════════════════════════
 
-/// Production rule engine: pluggable normalizer + prefilter + RegexSet DFA.
+/// Production rule engine: pluggable normalizer + prefilter + `RegexSet` DFA.
 ///
 /// Default type parameters give zero-cost production behavior via
 /// monomorphization. Tests can substitute `IdentityNormalizer` and/or
@@ -286,7 +283,7 @@ impl<N: Normalizer, P: Prefilter> RuleEngine for RegexEngine<N, P> {
                     };
                 }
                 Severity::Warn if best_warn.is_none() => best_warn = Some(rule),
-                _ => {}
+                Severity::Warn => {}
             }
         }
 

@@ -29,10 +29,11 @@ pub trait RuleProvider {
 // Built-in providers
 // ═══════════════════════════════════════════════════════════════════
 
-/// Compiled-in default rules (embedded via include_str!).
+/// Compiled-in default rules (embedded via `include_str!`).
 pub struct DefaultsProvider;
 
 impl RuleProvider for DefaultsProvider {
+    #[allow(clippy::unnecessary_literal_bound)]
     fn name(&self) -> &str { "defaults" }
 
     fn rules(&self) -> anyhow::Result<Vec<Rule>> {
@@ -47,6 +48,7 @@ pub struct DirectoryProvider {
 }
 
 impl RuleProvider for DirectoryProvider {
+    #[allow(clippy::unnecessary_literal_bound)]
     fn name(&self) -> &str { "directory" }
 
     fn rules(&self) -> anyhow::Result<Vec<Rule>> {
@@ -123,6 +125,12 @@ pub fn resolve(
 // ═══════════════════════════════════════════════════════════════════
 
 /// Load compiled-in default rules.
+///
+/// # Panics
+///
+/// Panics if the compiled-in `defaults.yaml` fails to parse, which
+/// indicates a build-time invariant violation.
+#[must_use]
 pub fn default_rules() -> Vec<Rule> {
     DefaultsProvider.rules().expect("compiled-in defaults.yaml must be valid")
 }
@@ -136,9 +144,10 @@ pub fn config_path() -> PathBuf {
 /// Shikumi config directory: `~/.config/guardrail/`
 #[must_use]
 pub fn config_dir() -> PathBuf {
-    env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(".config"))
+    env::var("XDG_CONFIG_HOME").map_or_else(
+        |_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(".config"),
+        PathBuf::from,
+    )
         .join("guardrail")
 }
 
@@ -164,6 +173,11 @@ pub fn load_user_config(path: &Path) -> anyhow::Result<GuardrailConfig> {
 }
 
 /// Legacy convenience: merge defaults + user config.
+///
+/// # Panics
+///
+/// Panics if the mock provider fails, which should never happen
+/// since mock providers always succeed.
 #[must_use]
 pub fn resolve_rules(defaults: &[Rule], config: &GuardrailConfig) -> Vec<Rule> {
     let provider = MockProvider { label: "defaults".into(), rules: defaults.to_vec() };

@@ -21,11 +21,10 @@ pub struct FsCache {
 impl FsCache {
     #[must_use]
     pub fn default_path() -> PathBuf {
-        env::var("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                PathBuf::from(env::var("HOME").unwrap_or_default()).join(".cache")
-            })
+        env::var("XDG_CACHE_HOME").map_or_else(
+            |_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(".cache"),
+            PathBuf::from,
+        )
             .join("guardrail/compiled.json")
     }
 }

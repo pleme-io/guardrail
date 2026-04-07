@@ -10,6 +10,7 @@ use crate::model::{Decision, Rule};
 
 /// Derive a command that MUST match the rule's regex pattern.
 /// Uses explicit `test_block` if present, otherwise auto-derives from pattern.
+#[must_use]
 pub fn derive_test_block(rule: &Rule) -> String {
     if let Some(ref tb) = rule.test_block {
         return tb.clone();
@@ -19,6 +20,7 @@ pub fn derive_test_block(rule: &Rule) -> String {
 
 /// Derive a command that must NOT match the rule's regex pattern.
 /// Uses explicit `test_allow` if present, otherwise auto-derives.
+#[must_use]
 pub fn derive_test_allow(rule: &Rule) -> String {
     if let Some(ref ta) = rule.test_allow {
         return ta.clone();
@@ -175,8 +177,9 @@ fn ensure_engine_passthrough(cmd: &str) -> String {
 
 /// Validate every rule at the regex level:
 /// 1. Pattern compiles
-/// 2. Auto-derived test_block matches the pattern
-/// 3. Auto-derived test_allow does NOT match the pattern
+/// 2. Auto-derived `test_block` matches the pattern
+/// 3. Auto-derived `test_allow` does NOT match the pattern
+#[must_use]
 pub fn validate_all_rules_regex(rules: &[Rule]) -> Vec<String> {
     let mut failures = Vec::new();
 
@@ -216,8 +219,9 @@ pub fn validate_all_rules_regex(rules: &[Rule]) -> Vec<String> {
 }
 
 /// Validate rules through the full engine pipeline:
-/// 1. All rules compile into a RegexSet
-/// 2. test_block commands produce Block or Warn (not Allow)
+/// 1. All rules compile into a `RegexSet`
+/// 2. `test_block` commands produce Block or Warn (not Allow)
+#[must_use]
 pub fn validate_all_rules_engine(rules: &[Rule]) -> Vec<String> {
     let mut failures = Vec::new();
 
@@ -259,7 +263,13 @@ pub struct BenchmarkResult {
     pub max_match_rule: String,
 }
 
-/// Benchmark RegexSet compilation and per-rule matching.
+/// Benchmark `RegexSet` compilation and per-rule matching.
+///
+/// # Panics
+///
+/// Panics if the rules fail to compile into a `RegexSet`, which
+/// indicates invalid regex patterns in the input.
+#[must_use]
 pub fn benchmark_rules(rules: &[Rule]) -> BenchmarkResult {
     let start = Instant::now();
     let engine = RegexEngine::new(rules.to_vec()).expect("rules must compile for benchmark");
@@ -283,7 +293,7 @@ pub fn benchmark_rules(rules: &[Rule]) -> BenchmarkResult {
     }
 
     let total_match: std::time::Duration = match_times.iter().sum();
-    let count = match_times.len().max(1) as u32;
+    let count = u32::try_from(match_times.len().max(1)).unwrap_or(u32::MAX);
 
     BenchmarkResult {
         rule_count: rules.len(),

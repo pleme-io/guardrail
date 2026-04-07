@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-/// Claude Code PreToolUse hook payload.
+/// Claude Code `PreToolUse` hook payload.
 #[derive(Debug, Clone, Deserialize)]
 pub struct HookInput {
     pub tool_name: Option<String>,
     pub tool_input: Option<ToolInput>,
 }
 
-/// Tool input fields — captures Bash, Write, Edit, NotebookEdit, and MCP tools.
+/// Tool input fields — captures Bash, Write, Edit, `NotebookEdit`, and MCP tools.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ToolInput {
     /// Bash command string.
@@ -22,7 +22,7 @@ pub struct ToolInput {
     pub new_string: Option<String>,
     /// Edit tool: string being replaced.
     pub old_string: Option<String>,
-    /// NotebookEdit tool: new cell source.
+    /// `NotebookEdit` tool: new cell source.
     pub new_source: Option<String>,
     /// Catch-all for MCP tool parameters and other unknown fields.
     #[serde(flatten)]
@@ -69,9 +69,8 @@ pub struct ScannableContent {
 pub fn extract_scannable_content(input: &HookInput) -> Vec<ScannableContent> {
     let mut items = Vec::new();
     let tool_name = input.tool_name.as_deref().unwrap_or("");
-    let tool_input = match &input.tool_input {
-        Some(ti) => ti,
-        None => return items,
+    let Some(tool_input) = &input.tool_input else {
+        return items;
     };
 
     match tool_name {

@@ -57,11 +57,21 @@ impl WriteJournal {
     }
 
     /// Save the journal to the default path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parent directories can't be created or the
+    /// journal file can't be written.
     pub fn save(&self) -> anyhow::Result<()> {
         self.save_to(&default_journal_path())
     }
 
     /// Save the journal to a specific path (for testing).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parent directories can't be created or the
+    /// file can't be written.
     pub fn save_to(&self, path: &Path) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
