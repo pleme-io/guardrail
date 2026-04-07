@@ -177,6 +177,12 @@ impl fmt::Display for Decision {
     }
 }
 
+impl fmt::Display for Rule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}] {}: {}", self.severity, self.name, self.message)
+    }
+}
+
 impl Decision {
     /// Returns `true` if this decision allows the command.
     #[must_use]
@@ -570,6 +576,15 @@ mod tests {
         let rule: Rule = serde_json::from_str(json).unwrap();
         assert!(rule.test_block.is_none());
         assert!(rule.test_allow.is_none());
+    }
+
+    #[test]
+    fn rule_display() {
+        let rule = Rule::builder("rm-rf-root", r"rm\s+-rf")
+            .severity(Severity::Block)
+            .message("Recursive force-delete from root")
+            .build();
+        assert_eq!(rule.to_string(), "[block] rm-rf-root: Recursive force-delete from root");
     }
 
     #[test]
