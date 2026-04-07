@@ -58,12 +58,33 @@ pub enum Decision {
 
 // ── Display implementations ─────────────────────────────────────
 
+impl Severity {
+    /// Returns `true` for `Block` severity.
+    #[must_use]
+    pub const fn is_blocking(self) -> bool {
+        matches!(self, Self::Block)
+    }
+}
+
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Block => f.write_str("block"),
             Self::Warn => f.write_str("warn"),
         }
+    }
+}
+
+impl Category {
+    /// Returns a slice of all known categories.
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
+        &[
+            Self::Filesystem, Self::Git, Self::Database, Self::Kubernetes,
+            Self::Nix, Self::Docker, Self::Secrets, Self::Terraform,
+            Self::Cloud, Self::Flux, Self::Akeyless, Self::Process,
+            Self::Network, Self::Nosql,
+        ]
     }
 }
 
@@ -314,6 +335,12 @@ mod tests {
     }
 
     #[test]
+    fn severity_is_blocking() {
+        assert!(Severity::Block.is_blocking());
+        assert!(!Severity::Warn.is_blocking());
+    }
+
+    #[test]
     fn severity_fromstr_round_trip() {
         for sev in [Severity::Block, Severity::Warn] {
             let s = sev.to_string();
@@ -357,14 +384,7 @@ mod tests {
 
     #[test]
     fn category_serde_round_trip_all_variants() {
-        let all = [
-            Category::Filesystem, Category::Git, Category::Database,
-            Category::Kubernetes, Category::Nix, Category::Docker,
-            Category::Secrets, Category::Terraform, Category::Cloud,
-            Category::Flux, Category::Akeyless, Category::Process,
-            Category::Network, Category::Nosql,
-        ];
-        for cat in all {
+        for cat in Category::all().iter().copied() {
             let json = serde_json::to_string(&cat).unwrap();
             let back: Category = serde_json::from_str(&json).unwrap();
             assert_eq!(back, cat, "serde round-trip failed for {cat:?}");
@@ -384,15 +404,13 @@ mod tests {
     }
 
     #[test]
+    fn category_all_returns_14_variants() {
+        assert_eq!(Category::all().len(), 14);
+    }
+
+    #[test]
     fn category_fromstr_round_trip() {
-        let all = [
-            Category::Filesystem, Category::Git, Category::Database,
-            Category::Kubernetes, Category::Nix, Category::Docker,
-            Category::Secrets, Category::Terraform, Category::Cloud,
-            Category::Flux, Category::Akeyless, Category::Process,
-            Category::Network, Category::Nosql,
-        ];
-        for cat in all {
+        for cat in Category::all().iter().copied() {
             let s = cat.to_string();
             let parsed: Category = s.parse().unwrap();
             assert_eq!(parsed, cat, "FromStr round-trip failed for {cat:?}");
