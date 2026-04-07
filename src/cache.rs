@@ -304,4 +304,40 @@ mod tests {
         }).unwrap();
         assert_eq!(rules2.len(), 1);
     }
+
+    // ── resolve_cached error propagation ─────────────────────────
+
+    #[test]
+    fn resolve_cached_propagates_resolver_error() {
+        let cache: MemCache<Vec<Rule>> = MemCache::empty();
+        let fp = FixedFingerprinter(1);
+        let result = resolve_cached(&cache, &fp, || {
+            anyhow::bail!("resolver failed")
+        });
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("resolver failed"));
+    }
+
+    #[test]
+    fn resolve_cached_resolver_error_does_not_populate_cache() {
+        let cache: MemCache<Vec<Rule>> = MemCache::empty();
+        let fp = FixedFingerprinter(1);
+        let _ = resolve_cached(&cache, &fp, || -> anyhow::Result<Vec<Rule>> {
+            anyhow::bail!("boom")
+        });
+        assert!(cache.load().is_none(), "cache should remain empty on resolver error");
+    }
+
+    // ── FsCache default_path env behavior ────────────────────────
+
+    #[test]
+    fn fs_cache_default_path_contains_guardrail() {
+        let path = FsCache::default_path();
+        let path_str = path.to_string_lossy();
+        assert!(
+            path_str.contains("guardrail"),
+            "default path should contain 'guardrail', got: {path_str}"
+        );
+    }
 }

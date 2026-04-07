@@ -473,4 +473,66 @@ extraRules: []
         assert_eq!(back[0].name, "r1");
         assert_eq!(back[1].name, "r2");
     }
+
+    // ── Invalid YAML deserialization ─────────────────────────────
+
+    #[test]
+    fn rule_invalid_severity_yaml() {
+        let yaml = r#"
+- name: bad
+  pattern: "x"
+  severity: panic
+  message: "nope"
+  category: git
+"#;
+        let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "invalid severity should fail deserialization");
+    }
+
+    #[test]
+    fn rule_invalid_category_yaml() {
+        let yaml = r#"
+- name: bad
+  pattern: "x"
+  severity: block
+  message: "nope"
+  category: nonexistent
+"#;
+        let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "invalid category should fail deserialization");
+    }
+
+    #[test]
+    fn rule_missing_required_field_yaml() {
+        let yaml = r#"
+- name: incomplete
+  severity: block
+"#;
+        let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "missing required fields should fail");
+    }
+
+    #[test]
+    fn config_invalid_category_key_yaml() {
+        let yaml = r#"
+categories:
+  nonexistent: false
+"#;
+        let result: Result<GuardrailConfig, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "invalid category key should fail");
+    }
+
+    #[test]
+    fn config_nested_invalid_extra_rule() {
+        let yaml = r#"
+extraRules:
+  - name: bad
+    pattern: "x"
+    severity: invalid_severity
+    message: "nope"
+    category: git
+"#;
+        let result: Result<GuardrailConfig, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "invalid nested rule should fail");
+    }
 }

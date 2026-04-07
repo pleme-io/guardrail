@@ -556,4 +556,102 @@ mod tests {
         let lines = scan_content_lines(content);
         assert_eq!(lines.len(), 2);
     }
+
+    // ── MCP edge: bare mcp__ prefix ─────────────────────────────
+
+    #[test]
+    fn extract_mcp_bare_prefix() {
+        let json = r#"{"tool_name": "mcp__", "tool_input": {"field": "value"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(
+            items.iter().any(|i| i.text == "value"),
+            "mcp__ with bare prefix should still extract strings"
+        );
+    }
+
+    #[test]
+    fn extract_mcp_triple_underscore() {
+        let json = r#"{"tool_name": "mcp___foo", "tool_input": {"cmd": "terraform destroy"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.iter().any(|i| i.text == "terraform destroy"));
+    }
+
+    // ── ScanContext Debug ────────────────────────────────────────
+
+    #[test]
+    fn scan_context_debug_all_variants() {
+        let variants = [
+            ScanContext::BashCommand,
+            ScanContext::WriteContent,
+            ScanContext::EditNewString,
+            ScanContext::NotebookCell,
+            ScanContext::McpCommand,
+        ];
+        for ctx in variants {
+            let debug = format!("{ctx:?}");
+            assert!(!debug.is_empty());
+        }
+    }
+
+    // ── HookInput Debug / Clone ─────────────────────────────────
+
+    #[test]
+    fn hook_input_debug() {
+        let json = r#"{"tool_name": "Bash", "tool_input": {"command": "ls"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let debug = format!("{input:?}");
+        assert!(debug.contains("Bash"));
+    }
+
+    // ── ScannableContent Debug ──────────────────────────────────
+
+    #[test]
+    fn scannable_content_debug() {
+        let item = ScannableContent {
+            context: ScanContext::BashCommand,
+            text: "ls -la".to_owned(),
+        };
+        let debug = format!("{item:?}");
+        assert!(debug.contains("BashCommand"));
+        assert!(debug.contains("ls -la"));
+    }
+
+    #[test]
+    fn scannable_content_clone() {
+        let item = ScannableContent {
+            context: ScanContext::WriteContent,
+            text: "content".to_owned(),
+        };
+        let cloned = item.clone();
+        assert_eq!(cloned.context, ScanContext::WriteContent);
+        assert_eq!(cloned.text, "content");
+    }
+
+    // ── extract_command edge cases ──────────────────────────────
+
+    #[test]
+    fn extract_command_from_write_tool() {
+        let json = r#"{"tool_name": "Write", "tool_input": {"file_path": "/tmp/test", "content": "data"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        assert!(extract_command(&input).is_none());
+    }
+
+    #[test]
+    fn extract_command_when_no_tool_input() {
+        let json = r#"{"tool_name": "Bash"}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        assert!(extract_command(&input).is_none());
+    }
+
+    // ── scan_content_lines with mixed content ───────────────────
+
+    #[test]
+    fn scan_content_lines_shebang_filtered() {
+        let content = "#!/bin/bash\nrm -rf /tmp\n";
+        let lines = scan_content_lines(content);
+        assert!(!lines.iter().any(|l| l.starts_with("#!")));
+        assert!(lines.iter().any(|l| l.contains("rm")));
+    }
 }

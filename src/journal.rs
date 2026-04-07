@@ -558,4 +558,77 @@ mod tests {
         assert!(!has_script_extension("file.shell"));
         assert!(!has_script_extension("file.rs"));
     }
+
+    // ── extract_executed_paths: interpreter at end of command ────
+
+    #[test]
+    fn extract_paths_interpreter_at_end_no_script() {
+        let paths = extract_executed_paths("echo hello && bash");
+        assert!(paths.is_empty(), "bare interpreter with no script should yield nothing");
+    }
+
+    #[test]
+    fn extract_paths_full_path_interpreter() {
+        let paths = extract_executed_paths("/usr/bin/bash /tmp/script.sh");
+        assert!(paths.contains(&"/tmp/script.sh".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_python3_full_path() {
+        let paths = extract_executed_paths("/usr/local/bin/python3 /opt/app.py");
+        assert!(paths.contains(&"/opt/app.py".to_owned()));
+    }
+
+    // ── default_journal_path smoke test ──────────────────────────
+
+    #[test]
+    fn default_journal_path_is_absolute() {
+        let path = default_journal_path();
+        assert!(
+            path.is_absolute(),
+            "journal path should be absolute, got: {}",
+            path.display()
+        );
+    }
+
+    #[test]
+    fn default_journal_path_contains_guardrail() {
+        let path = default_journal_path();
+        let path_str = path.to_string_lossy();
+        assert!(
+            path_str.contains("guardrail"),
+            "journal path should contain 'guardrail', got: {path_str}"
+        );
+    }
+
+    // ── journal serde ────────────────────────────────────────────
+
+    #[test]
+    fn journal_serde_round_trip() {
+        let mut journal = WriteJournal::default();
+        journal.record("/tmp/test.sh", true);
+        let json = serde_json::to_string(&journal).unwrap();
+        let loaded: WriteJournal = serde_json::from_str(&json).unwrap();
+        assert!(loaded.is_dangerous("/tmp/test.sh"));
+    }
+
+    #[test]
+    fn journal_entry_serde() {
+        let entry = JournalEntry {
+            dangerous: true,
+            timestamp: 12345,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        let back: JournalEntry = serde_json::from_str(&json).unwrap();
+        assert!(back.dangerous);
+        assert_eq!(back.timestamp, 12345);
+    }
+
+    // ── now_secs sanity ──────────────────────────────────────────
+
+    #[test]
+    fn now_secs_returns_reasonable_value() {
+        let ts = now_secs();
+        assert!(ts > 1_700_000_000, "timestamp should be recent, got: {ts}");
+    }
 }

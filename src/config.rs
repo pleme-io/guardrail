@@ -647,6 +647,40 @@ extraRules:
         assert!(rules.iter().all(|r| r.category != Category::Filesystem && r.category != Category::Kubernetes));
     }
 
+    // ─── resolve() error propagation ───────────────────────────
+
+    struct FailingProvider;
+    impl RuleProvider for FailingProvider {
+        #[allow(clippy::unnecessary_literal_bound)]
+        fn name(&self) -> &str { "failing" }
+        fn rules(&self) -> anyhow::Result<Vec<Rule>> {
+            anyhow::bail!("provider exploded")
+        }
+    }
+
+    #[test]
+    fn resolve_propagates_provider_error() {
+        let config = GuardrailConfig::default();
+        let result = resolve(&[&FailingProvider], &config);
+        assert!(result.is_err());
+        let msg = format!("{:#}", result.unwrap_err());
+        assert!(
+            msg.contains("failing"),
+            "error should mention provider name, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn resolve_fails_on_first_bad_provider() {
+        let good = MockProvider {
+            label: "good".into(),
+            rules: vec![test_rule("ok", Category::Git)],
+        };
+        let config = GuardrailConfig::default();
+        let result = resolve(&[&good, &FailingProvider], &config);
+        assert!(result.is_err());
+    }
+
     // ── Suite uniqueness ────────────────────────────────────────
 
     #[test]

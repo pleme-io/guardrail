@@ -619,4 +619,125 @@ mod tests {
         );
         eprintln!("Content scan (1000 lines, {} dangerous): {elapsed:?}", lines.len());
     }
+
+    // ── derive_test_block / derive_test_allow ────────────────────
+
+    #[test]
+    fn derive_test_block_uses_explicit_when_present() {
+        let rule = Rule::builder("r", "pattern")
+            .test_block("explicit block cmd")
+            .build();
+        assert_eq!(derive_test_block(&rule), "explicit block cmd");
+    }
+
+    #[test]
+    fn derive_test_block_synthesizes_when_absent() {
+        let rule = Rule::builder("r", r"rm\s+-rf").build();
+        let cmd = derive_test_block(&rule);
+        assert!(!cmd.is_empty(), "synthesized command should not be empty");
+    }
+
+    #[test]
+    fn derive_test_allow_uses_explicit_when_present() {
+        let rule = Rule::builder("r", "pattern")
+            .test_allow("explicit allow cmd")
+            .build();
+        assert_eq!(derive_test_allow(&rule), "explicit allow cmd");
+    }
+
+    #[test]
+    fn derive_test_allow_returns_default_when_absent() {
+        let rule = Rule::builder("r", "pattern").build();
+        assert_eq!(derive_test_allow(&rule), "cargo build --release");
+    }
+
+    // ── validate_all_rules_regex error branches ──────────────────
+
+    #[test]
+    fn validate_regex_reports_invalid_pattern() {
+        let rules = vec![Rule::builder("bad-regex", "[invalid").build()];
+        let failures = validate_all_rules_regex(&rules);
+        assert!(!failures.is_empty());
+        assert!(failures[0].contains("pattern compile error"));
+    }
+
+    #[test]
+    fn validate_regex_reports_non_matching_test_block() {
+        let rule = Rule::builder("mismatch", r"^zzz_never_match$")
+            .test_block("this will not match")
+            .build();
+        let failures = validate_all_rules_regex(&[rule]);
+        assert!(!failures.is_empty());
+        assert!(failures[0].contains("did not match pattern"));
+    }
+
+    #[test]
+    fn validate_regex_reports_matching_test_allow() {
+        let rule = Rule::builder("false-positive", r"cargo")
+            .test_block("cargo test")
+            .test_allow("cargo build --release")
+            .build();
+        let failures = validate_all_rules_regex(&[rule]);
+        assert!(!failures.is_empty());
+        assert!(failures[0].contains("unexpectedly matched"));
+    }
+
+    #[test]
+    fn validate_regex_empty_rules_no_failures() {
+        let failures = validate_all_rules_regex(&[]);
+        assert!(failures.is_empty());
+    }
+
+    // ── validate_all_rules_engine error branches ─────────────────
+
+    #[test]
+    fn validate_engine_reports_compilation_failure() {
+        let rules = vec![Rule::builder("bad", "[invalid").build()];
+        let failures = validate_all_rules_engine(&rules);
+        assert!(!failures.is_empty());
+        assert!(failures[0].contains("compilation failed"));
+    }
+
+    #[test]
+    fn validate_engine_empty_rules_no_failures() {
+        let failures = validate_all_rules_engine(&[]);
+        assert!(failures.is_empty());
+    }
+
+    // ── benchmark_rules edge cases ──────────────────────────────
+
+    #[test]
+    fn benchmark_single_rule() {
+        let rules = vec![
+            Rule::builder("test-bench", r"rm\s+-rf")
+                .test_block("rm -rf /")
+                .build(),
+        ];
+        let result = benchmark_rules(&rules);
+        assert_eq!(result.rule_count, 1);
+        assert!(!result.max_match_rule.is_empty());
+    }
+
+    #[test]
+    fn benchmark_result_fields_consistent() {
+        let rules = config::default_rules();
+        let result = benchmark_rules(&rules);
+        assert_eq!(result.rule_count, rules.len());
+        assert!(result.avg_match_time <= result.total_match_time);
+        assert!(result.max_match_time <= result.total_match_time);
+    }
+
+    // ── synthesize_from_name ─────────────────────────────────────
+
+    #[test]
+    fn synthesize_from_name_basic() {
+        let cmd = synthesize_from_name("aws-ec2-terminate");
+        assert_eq!(cmd, "aws ec2 terminate --id test-123");
+    }
+
+    #[test]
+    fn synthesize_from_name_single_word() {
+        let cmd = synthesize_from_name("shutdown");
+        assert_eq!(cmd, "shutdown --id test-123");
+    }
 }

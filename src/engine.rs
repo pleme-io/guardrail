@@ -1044,4 +1044,62 @@ mod tests {
         assert_eq!(Category::Cloud.to_string(), "cloud");
         assert_eq!(Category::Nosql.to_string(), "nosql");
     }
+
+    // -- PrefixPrefilter::prefix_set ---------------------------------
+
+    #[test]
+    fn prefix_set_is_non_empty() {
+        let set = PrefixPrefilter::prefix_set();
+        assert!(!set.is_empty());
+    }
+
+    #[test]
+    fn prefix_set_contains_known_prefixes() {
+        let set = PrefixPrefilter::prefix_set();
+        for expected in ["rm", "git", "kubectl", "terraform", "docker", "aws"] {
+            assert!(set.contains(expected), "prefix_set missing '{expected}'");
+        }
+    }
+
+    #[test]
+    fn prefix_set_does_not_contain_safe_commands() {
+        let set = PrefixPrefilter::prefix_set();
+        for safe in ["ls", "cat", "rg", "wc", "head", "tail", "grep"] {
+            assert!(!set.contains(safe), "prefix_set should not contain '{safe}'");
+        }
+    }
+
+    // -- RuleEngine::rule_count default impl -------------------------
+
+    #[test]
+    fn rule_count_default_impl_equals_rules_len() {
+        let rules = vec![
+            Rule::builder("a", "a").build(),
+            Rule::builder("b", "b").build(),
+        ];
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
+        assert_eq!(engine.rule_count(), engine.rules().len());
+    }
+
+    // -- Prefilter: third-word detection -----------------------------
+
+    #[test]
+    fn prefilter_third_word_dangerous() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("some other rm -rf /"));
+    }
+
+    #[test]
+    fn prefilter_fourth_word_not_checked() {
+        let p = PrefixPrefilter;
+        assert!(p.is_safe("one two three rm -rf /"));
+    }
+
+    // -- SQL comment obfuscation with tab ----------------------------
+
+    #[test]
+    fn prefilter_sql_line_comment_tab_not_safe() {
+        let p = PrefixPrefilter;
+        assert!(!p.is_safe("SELECT 1 --\thidden"));
+    }
 }
