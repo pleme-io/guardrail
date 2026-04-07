@@ -20,4 +20,4 @@ pub use engine::{
     NixStoreNormalizer, PrefixPrefilter, ProductionNormalizer, RegexEngine, RuleEngine,
     SqlCommentStripper,
 };
-pub use model::{Category, Decision, GuardrailConfig, Rule, RuleBuilder, Severity};
+pub use model::{Category, Decision, GuardrailConfig, ParseEnumError, Rule, RuleBuilder, Severity};

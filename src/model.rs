@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +87,63 @@ impl fmt::Display for Category {
         f.write_str(s)
     }
 }
+
+impl FromStr for Severity {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "block" => Ok(Self::Block),
+            "warn" => Ok(Self::Warn),
+            _ => Err(ParseEnumError {
+                type_name: "Severity",
+                value: s.to_owned(),
+            }),
+        }
+    }
+}
+
+impl FromStr for Category {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "filesystem" => Ok(Self::Filesystem),
+            "git" => Ok(Self::Git),
+            "database" => Ok(Self::Database),
+            "kubernetes" => Ok(Self::Kubernetes),
+            "nix" => Ok(Self::Nix),
+            "docker" => Ok(Self::Docker),
+            "secrets" => Ok(Self::Secrets),
+            "terraform" => Ok(Self::Terraform),
+            "cloud" => Ok(Self::Cloud),
+            "flux" => Ok(Self::Flux),
+            "akeyless" => Ok(Self::Akeyless),
+            "process" => Ok(Self::Process),
+            "network" => Ok(Self::Network),
+            "nosql" => Ok(Self::Nosql),
+            _ => Err(ParseEnumError {
+                type_name: "Category",
+                value: s.to_owned(),
+            }),
+        }
+    }
+}
+
+/// Error returned when parsing a string into a `Severity` or `Category` fails.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseEnumError {
+    pub type_name: &'static str,
+    pub value: String,
+}
+
+impl fmt::Display for ParseEnumError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown {} value: '{}'", self.type_name, self.value)
+    }
+}
+
+impl std::error::Error for ParseEnumError {}
 
 impl fmt::Display for Decision {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -224,6 +282,23 @@ mod tests {
         assert!(Severity::Block < Severity::Warn);
     }
 
+    #[test]
+    fn severity_fromstr_round_trip() {
+        for sev in [Severity::Block, Severity::Warn] {
+            let s = sev.to_string();
+            let parsed: Severity = s.parse().unwrap();
+            assert_eq!(parsed, sev);
+        }
+    }
+
+    #[test]
+    fn severity_fromstr_invalid() {
+        let err = "invalid".parse::<Severity>().unwrap_err();
+        assert_eq!(err.type_name, "Severity");
+        assert_eq!(err.value, "invalid");
+        assert!(err.to_string().contains("Severity"));
+    }
+
     // ── Category ────────────────────────────────────────────────
 
     #[test]
@@ -275,6 +350,29 @@ mod tests {
     fn category_ordering() {
         assert!(Category::Filesystem < Category::Git);
         assert!(Category::Network < Category::Nosql);
+    }
+
+    #[test]
+    fn category_fromstr_round_trip() {
+        let all = [
+            Category::Filesystem, Category::Git, Category::Database,
+            Category::Kubernetes, Category::Nix, Category::Docker,
+            Category::Secrets, Category::Terraform, Category::Cloud,
+            Category::Flux, Category::Akeyless, Category::Process,
+            Category::Network, Category::Nosql,
+        ];
+        for cat in all {
+            let s = cat.to_string();
+            let parsed: Category = s.parse().unwrap();
+            assert_eq!(parsed, cat, "FromStr round-trip failed for {cat:?}");
+        }
+    }
+
+    #[test]
+    fn category_fromstr_invalid() {
+        let err = "bogus".parse::<Category>().unwrap_err();
+        assert_eq!(err.type_name, "Category");
+        assert!(err.to_string().contains("bogus"));
     }
 
     // ── Decision ────────────────────────────────────────────────
