@@ -108,9 +108,7 @@ pub fn extract_scannable_content(input: &HookInput) -> Vec<ScannableContent> {
             }
         }
         _ if tool_name.starts_with("mcp__") => {
-            // MCP tools: recursively collect all string values from extra fields
-            collect_mcp_strings(&tool_input.extra, &mut items);
-            // Also check known fields
+            McpStringCollector { items: &mut items }.collect_from_map(&tool_input.extra);
             if let Some(cmd) = &tool_input.command {
                 items.push(ScannableContent {
                     context: ScanContext::McpCommand,
@@ -125,49 +123,56 @@ pub fn extract_scannable_content(input: &HookInput) -> Vec<ScannableContent> {
 }
 
 /// Maximum recursion depth for MCP JSON parameter collection.
-/// Prevents pathological nesting from consuming stack/time.
 const MCP_JSON_MAX_DEPTH: usize = 8;
 
 /// Maximum number of strings to collect from MCP parameters.
-/// Prevents extreme fan-out from slowing down the check.
 const MCP_JSON_MAX_STRINGS: usize = 50;
 
-/// Recursively collect string values from MCP tool parameters.
-fn collect_mcp_strings(map: &HashMap<String, serde_json::Value>, items: &mut Vec<ScannableContent>) {
-    for value in map.values() {
-        if items.len() >= MCP_JSON_MAX_STRINGS {
-            break;
-        }
-        collect_json_strings(value, items, 0);
-    }
+/// Bounded collector for MCP tool string parameters.
+///
+/// Limits both recursion depth and total string count to prevent
+/// pathological JSON payloads from consuming excessive resources.
+struct McpStringCollector<'a> {
+    items: &'a mut Vec<ScannableContent>,
 }
 
-/// Recursively extract string values from a JSON value tree.
-/// Bounded by depth and total item count for performance.
-fn collect_json_strings(value: &serde_json::Value, items: &mut Vec<ScannableContent>, depth: usize) {
-    if depth >= MCP_JSON_MAX_DEPTH || items.len() >= MCP_JSON_MAX_STRINGS {
-        return;
+impl McpStringCollector<'_> {
+    fn is_full(&self) -> bool {
+        self.items.len() >= MCP_JSON_MAX_STRINGS
     }
-    match value {
-        serde_json::Value::String(s) => {
-            if !s.is_empty() {
-                items.push(ScannableContent {
+
+    fn collect_from_map(&mut self, map: &HashMap<String, serde_json::Value>) {
+        for value in map.values() {
+            if self.is_full() {
+                break;
+            }
+            self.collect_value(value, 0);
+        }
+    }
+
+    fn collect_value(&mut self, value: &serde_json::Value, depth: usize) {
+        if depth >= MCP_JSON_MAX_DEPTH || self.is_full() {
+            return;
+        }
+        match value {
+            serde_json::Value::String(s) if !s.is_empty() => {
+                self.items.push(ScannableContent {
                     context: ScanContext::McpCommand,
                     text: s.clone(),
                 });
             }
-        }
-        serde_json::Value::Array(arr) => {
-            for v in arr {
-                collect_json_strings(v, items, depth + 1);
+            serde_json::Value::Array(arr) => {
+                for v in arr {
+                    self.collect_value(v, depth + 1);
+                }
             }
-        }
-        serde_json::Value::Object(obj) => {
-            for v in obj.values() {
-                collect_json_strings(v, items, depth + 1);
+            serde_json::Value::Object(obj) => {
+                for v in obj.values() {
+                    self.collect_value(v, depth + 1);
+                }
             }
+            _ => {}
         }
-        _ => {}
     }
 }
 
