@@ -254,6 +254,7 @@ pub fn validate_all_rules_engine(rules: &[Rule]) -> Vec<String> {
 // ═══════════════════════════════════════════════════════════════════
 
 /// Performance benchmark results.
+#[must_use]
 pub struct BenchmarkResult {
     pub rule_count: usize,
     pub compile_time: std::time::Duration,

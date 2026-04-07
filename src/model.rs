@@ -49,6 +49,7 @@ pub struct Rule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
+#[must_use = "a Decision should be inspected, not discarded"]
 pub enum Decision {
     Allow,
     Block { rule: String, message: String },
