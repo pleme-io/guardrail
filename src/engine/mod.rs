@@ -1,14 +1,16 @@
-use std::borrow::Cow;
-use std::collections::HashSet;
-use std::fmt;
-use std::sync::LazyLock;
+mod prefilter;
+mod sql;
 
-// Re-export generic engine components from hayai
+use std::fmt;
+
 pub use hayai::engine::{
     ChainedNormalizer, IdentityNormalizer, MatchEngine, Normalizer, NullPrefilter, PathNormalizer,
     Prefilter, contains_ascii_ci,
 };
 use hayai::engine::RegexMatcher;
+
+pub use self::prefilter::PrefixPrefilter;
+pub use self::sql::SqlCommentStripper;
 
 use crate::model::{Decision, Rule, Severity};
 
@@ -28,171 +30,11 @@ pub trait RuleEngine {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// Domain-specific normalizer: SqlCommentStripper
-// ═══════════════════════════════════════════════════════════════════
-
-static SQL_BLOCK_COMMENT_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"/\*.*?\*/").expect("SQL block comment regex is valid"));
-
-static SQL_LINE_COMMENT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?m)(?:^|[ \t])-- [^-].*$")
-        .expect("SQL line comment regex is valid")
-});
-
-/// Strips SQL block comments (`/* ... */`) and line comments (`-- ...`).
-/// Preserves `--` when it appears as a CLI flag (preceded by a word char).
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SqlCommentStripper;
-
-impl Normalizer for SqlCommentStripper {
-    fn normalize<'a>(&self, command: &'a str) -> Cow<'a, str> {
-        let has_block = SQL_BLOCK_COMMENT_RE.is_match(command);
-        let has_line = SQL_LINE_COMMENT_RE.is_match(command);
-        if !has_block && !has_line {
-            return Cow::Borrowed(command);
-        }
-        let mut result = if has_block {
-            SQL_BLOCK_COMMENT_RE.replace_all(command, " ").into_owned()
-        } else {
-            command.to_owned()
-        };
-        if has_line || SQL_LINE_COMMENT_RE.is_match(&result) {
-            result = SQL_LINE_COMMENT_RE.replace_all(&result, "").into_owned();
-        }
-        Cow::Owned(result)
-    }
-}
-
 /// Production normalizer: `PathNormalizer` then `SqlCommentStripper`.
 pub type ProductionNormalizer = ChainedNormalizer<PathNormalizer, SqlCommentStripper>;
 
 /// Backward-compatible alias for `PathNormalizer`.
 pub type NixStoreNormalizer = PathNormalizer;
-
-// ═══════════════════════════════════════════════════════════════════
-// Domain-specific prefilter: PrefixPrefilter with guardrail keywords
-// ═══════════════════════════════════════════════════════════════════
-
-/// First-word prefixes that COULD trigger a rule.
-const DANGEROUS_PREFIXES: &[&str] = &[
-    // filesystem
-    "rm", "dd", "mkfs", "chmod", "chown", "mv", "truncate", "shred",
-    // git
-    "git",
-    // database / SQL
-    "psql", "mysql", "sqlite3", "sqlcmd", "sqlx", "diesel", "prisma",
-    "liquibase", "flyway", "knex", "rails", "rake", "python", "django-admin",
-    "mongosh", "mongo",
-    // kubernetes
-    "kubectl", "helm", "flux",
-    // cloud
-    "aws", "gcloud", "gsutil", "az", "bq",
-    // nix
-    "nix", "nix-collect-garbage",
-    // docker
-    "docker",
-    // secrets
-    "sops", "echo",
-    // terraform / iac
-    "terraform", "pulumi", "ansible-playbook",
-    // akeyless
-    "akeyless", "aky",
-    // process
-    "kill", "killall", "pkill", "shutdown", "poweroff", "halt", "reboot",
-    "systemctl", "launchctl",
-    // network
-    "iptables", "ufw", "ip", "nft",
-    // nosql
-    "redis-cli",
-    // curl/wget (pipe install, elasticsearch)
-    "curl", "wget",
-    // mysql admin
-    "mysqladmin",
-    // shell wrappers -- commands that execute other commands
-    "sh", "bash", "zsh", "fish", "dash",
-    "env", "sudo", "doas", "nohup", "nice", "timeout",
-    // eval / indirect execution
-    "eval", "xargs", "find",
-    // scheduling
-    "crontab", "at",
-    // disk partitioning
-    "fdisk", "parted", "wipefs",
-    // sync/publish (supply chain)
-    "npm", "cargo", "gem", "pip", "twine",
-    // remote sync
-    "rsync", "rclone",
-    // log wiping
-    "journalctl",
-    // ssh (remote command execution)
-    "ssh",
-];
-
-static PREFIX_SET: LazyLock<HashSet<&'static str>> =
-    LazyLock::new(|| DANGEROUS_PREFIXES.iter().copied().collect());
-
-/// Production prefilter: skips DFA for commands whose first 3 words
-/// don't match a known dangerous prefix AND don't contain SQL keywords.
-///
-/// Safe commands (~99%): ~50ns. Dangerous commands: forwarded to DFA.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct PrefixPrefilter;
-
-impl PrefixPrefilter {
-    /// Access the static set of dangerous prefixes (for test utilities).
-    #[must_use]
-    pub fn prefix_set() -> &'static HashSet<&'static str> {
-        &PREFIX_SET
-    }
-}
-
-impl Prefilter for PrefixPrefilter {
-    fn is_safe(&self, command: &str) -> bool {
-        // Commands starting with $ are variable expansions -- must reach DFA
-        let trimmed = command.trim_start();
-        if trimmed.starts_with('$') {
-            return false;
-        }
-        // Backtick command substitution -- must reach DFA
-        if trimmed.contains('`') {
-            return false;
-        }
-        for (count, word) in command.split_whitespace().enumerate() {
-            if count >= 3 {
-                break;
-            }
-            if PREFIX_SET.contains(word) || PREFIX_SET.iter().any(|p| word.starts_with(p)) {
-                return false;
-            }
-        }
-        // Zero-alloc SQL keyword scan: byte-level case-insensitive search
-        // avoids the String allocation of command.to_uppercase()
-        if contains_ascii_ci(command.as_bytes(), b"DROP ")
-            || contains_ascii_ci(command.as_bytes(), b"TRUNCATE ")
-            || contains_ascii_ci(command.as_bytes(), b"DELETE FROM")
-            || contains_ascii_ci(command.as_bytes(), b"REVOKE ")
-            || contains_ascii_ci(command.as_bytes(), b"FLUSHALL")
-            || contains_ascii_ci(command.as_bytes(), b"FLUSHDB")
-            || contains_ascii_ci(command.as_bytes(), b"VACUUM FULL")
-            || contains_ascii_ci(command.as_bytes(), b"BASE64")
-            || contains_ascii_ci(command.as_bytes(), b"| BASH")
-            || contains_ascii_ci(command.as_bytes(), b"| SH")
-        {
-            return false;
-        }
-        // SQL comment obfuscation: if command contains block comment or SQL
-        // line comment markers, it might be hiding SQL keywords after normalization.
-        if command.as_bytes().windows(2).any(|w| w == b"/*")
-            || command
-                .as_bytes()
-                .windows(3)
-                .any(|w| w == b"-- " || w == b"--\t")
-        {
-            return false;
-        }
-        true
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // RegexEngine -- wraps hayai::RegexMatcher, adds Decision logic
@@ -410,7 +252,6 @@ mod tests {
     fn sql_comment_stripper_line_comment() {
         let n = SqlCommentStripper;
         let result = n.normalize("DROP TABLE -- this is a comment\nusers");
-        // Line comment removed; newline preserved
         assert!(result.contains("DROP TABLE"));
     }
 
@@ -418,7 +259,6 @@ mod tests {
     fn sql_comment_stripper_preserves_cli_flags() {
         let n = SqlCommentStripper;
         let result = n.normalize("cargo build -- --release");
-        // `--` preceded by word char 'd' -> not a SQL comment
         assert_eq!(&*result, "cargo build -- --release");
         assert!(matches!(result, Cow::Borrowed(_)));
     }
@@ -512,9 +352,7 @@ mod tests {
         let normalizer = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
         let engine =
             RegexEngine::with_plugins(rules, normalizer, NullPrefilter).unwrap();
-        // Even "safe" commands like "ls" reach the DFA -- but no rule matches
         assert!(matches!(engine.check("ls -la"), Decision::Allow));
-        // Dangerous commands still blocked
         assert!(matches!(engine.check("rm -rf /"), Decision::Block { .. }));
     }
 
@@ -523,11 +361,9 @@ mod tests {
         let rules = config::default_rules();
         let engine =
             RegexEngine::with_plugins(rules, IdentityNormalizer, PrefixPrefilter).unwrap();
-        // Without normalization, nix store paths in the command would affect matching
-        // (the "rm" would be in the store path, not as a standalone command)
         assert!(matches!(
             engine.check("/nix/store/abc123-coreutils-9.0/bin/rm -rf /"),
-            Decision::Allow // identity normalizer doesn't strip the path
+            Decision::Allow
         ));
     }
 
@@ -763,8 +599,6 @@ mod tests {
     #[test]
     fn prefilter_cli_double_dash_is_safe() {
         let p = PrefixPrefilter;
-        // `--release` has no space after `--` -> not a SQL comment marker -> safe
-        // (using `rg` which is not in the dangerous prefix list)
         assert!(p.is_safe("rg --release pattern ."));
     }
 
@@ -1090,4 +924,7 @@ mod tests {
         let p = PrefixPrefilter;
         assert!(!p.is_safe("SELECT 1 --\thidden"));
     }
+
+    // Cow is used via Normalizer trait
+    use std::borrow::Cow;
 }
