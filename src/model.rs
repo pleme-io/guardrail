@@ -291,6 +291,20 @@ pub struct GuardrailConfig {
     pub disabled_rules: Vec<String>,
 }
 
+impl GuardrailConfig {
+    /// Whether a given category is enabled. Defaults to `true` if not configured.
+    #[must_use]
+    pub fn is_category_enabled(&self, cat: Category) -> bool {
+        self.categories.get(&cat).copied().unwrap_or(true)
+    }
+
+    /// Whether a rule name is disabled in this config.
+    #[must_use]
+    pub fn is_rule_disabled(&self, name: &str) -> bool {
+        self.disabled_rules.iter().any(|n| n == name)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -637,6 +651,29 @@ mod tests {
         assert!(config.categories.is_empty());
         assert!(config.extra_rules.is_empty());
         assert!(config.disabled_rules.is_empty());
+    }
+
+    #[test]
+    fn config_is_category_enabled_default_true() {
+        let config = GuardrailConfig::default();
+        assert!(config.is_category_enabled(Category::Git));
+        assert!(config.is_category_enabled(Category::Filesystem));
+    }
+
+    #[test]
+    fn config_is_category_enabled_explicit_false() {
+        let mut config = GuardrailConfig::default();
+        config.categories.insert(Category::Git, false);
+        assert!(!config.is_category_enabled(Category::Git));
+        assert!(config.is_category_enabled(Category::Filesystem));
+    }
+
+    #[test]
+    fn config_is_rule_disabled() {
+        let mut config = GuardrailConfig::default();
+        config.disabled_rules.push("rm-rf-root".into());
+        assert!(config.is_rule_disabled("rm-rf-root"));
+        assert!(!config.is_rule_disabled("other-rule"));
     }
 
     #[test]

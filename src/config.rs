@@ -113,20 +113,22 @@ pub fn resolve(
     providers: &[&dyn RuleProvider],
     config: &GuardrailConfig,
 ) -> anyhow::Result<Vec<Rule>> {
-    let mut all_rules = Vec::new();
-    for provider in providers {
-        let rules = provider.rules()
-            .with_context(|| format!("loading rules from provider '{}'", provider.name()))?;
-        all_rules.extend(rules);
-    }
+    let mut all_rules = providers
+        .iter()
+        .map(|p| {
+            p.rules()
+                .with_context(|| format!("loading rules from provider '{}'", p.name()))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-    // Append extra rules from user config
     all_rules.extend(config.extra_rules.clone());
 
-    // Apply filters: category toggles + disabled rules
-    let filtered: Vec<Rule> = all_rules
+    let filtered = all_rules
         .into_iter()
-        .filter(|r| *config.categories.get(&r.category).unwrap_or(&true))
+        .filter(|r| config.is_category_enabled(r.category))
         .filter(|r| !config.disabled_rules.contains(&r.name))
         .collect();
 
