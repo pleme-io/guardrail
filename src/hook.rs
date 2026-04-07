@@ -54,6 +54,18 @@ impl ScanContext {
             Self::WriteContent | Self::EditNewString | Self::NotebookCell
         )
     }
+
+    /// Whether this context represents file content (vs. a direct command).
+    #[must_use]
+    pub const fn is_content(&self) -> bool {
+        self.downgrade_block()
+    }
+
+    /// Whether this context represents a directly-executable command.
+    #[must_use]
+    pub const fn is_command(&self) -> bool {
+        matches!(self, Self::BashCommand | Self::McpCommand)
+    }
 }
 
 /// A piece of scannable content extracted from a hook input.
@@ -357,6 +369,24 @@ mod tests {
     #[test]
     fn notebook_context_downgrades() {
         assert!(ScanContext::NotebookCell.downgrade_block());
+    }
+
+    #[test]
+    fn scan_context_is_command() {
+        assert!(ScanContext::BashCommand.is_command());
+        assert!(ScanContext::McpCommand.is_command());
+        assert!(!ScanContext::WriteContent.is_command());
+        assert!(!ScanContext::EditNewString.is_command());
+        assert!(!ScanContext::NotebookCell.is_command());
+    }
+
+    #[test]
+    fn scan_context_is_content() {
+        assert!(!ScanContext::BashCommand.is_content());
+        assert!(!ScanContext::McpCommand.is_content());
+        assert!(ScanContext::WriteContent.is_content());
+        assert!(ScanContext::EditNewString.is_content());
+        assert!(ScanContext::NotebookCell.is_content());
     }
 
     // ── Content line scanning ───────────────────────────────────

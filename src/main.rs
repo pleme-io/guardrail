@@ -81,7 +81,7 @@ fn cmd_check() -> Result<()> {
     let mut write_dangerous = false;
 
     for item in &scannable {
-        if item.context.downgrade_block() {
+        if item.context.is_content() {
             write_dangerous |= check_content_item(&engine, &item.text);
         } else {
             check_command_item(&engine, item);
@@ -153,7 +153,7 @@ fn record_write_journal(
     scannable: &[hook::ScannableContent],
     dangerous: bool,
 ) {
-    let has_content_scan = scannable.iter().any(|s| s.context.downgrade_block());
+    let has_content_scan = scannable.iter().any(|s| s.context.is_content());
     if !has_content_scan {
         return;
     }
