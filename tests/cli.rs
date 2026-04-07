@@ -259,3 +259,202 @@ fn nosql_suite_blocks_flushall() {
         .assert()
         .failure();
 }
+
+// ── Invalid / malformed input ─────────────────────────────
+
+#[test]
+fn check_invalid_json_fails() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin("this is not json")
+        .assert()
+        .failure();
+}
+
+#[test]
+fn check_null_tool_name_allows() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name": null, "tool_input": null}"#)
+        .assert()
+        .success();
+}
+
+// ── Compile command ─────────────────────────────────────────
+
+#[test]
+fn compile_succeeds() {
+    let cache_dir = TempDir::new().unwrap();
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["compile"])
+        .env("XDG_CACHE_HOME", cache_dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("compiled"));
+}
+
+#[test]
+fn compile_creates_cache_file() {
+    let cache_dir = TempDir::new().unwrap();
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["compile"])
+        .env("XDG_CACHE_HOME", cache_dir.path())
+        .assert()
+        .success();
+    let cache_path = cache_dir.path().join("guardrail/compiled.json");
+    assert!(cache_path.exists(), "compile should create cache file at {}", cache_path.display());
+}
+
+// ── Validate command ────────────────────────────────────────
+
+#[test]
+fn validate_with_valid_config() {
+    let dir = TempDir::new().unwrap();
+    let config_dir = dir.path().join("guardrail");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::write(config_dir.join("guardrail.yaml"), r#"
+disabledRules:
+  - rm-rf-root
+"#).unwrap();
+
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["validate"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("config valid"));
+}
+
+// ── List command ────────────────────────────────────────────
+
+#[test]
+fn list_shows_block_and_warn_rules() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["list"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("BLOCK").or(predicate::str::contains("WARN")));
+}
+
+#[test]
+fn list_shows_rule_count() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["list"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("rules active"));
+}
+
+// ── Process suite rules via CLI ─────────────────────────────
+
+#[test]
+fn process_suite_blocks_shutdown() {
+    let dir = setup_with_suites();
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"shutdown -h now"}}"#)
+        .assert()
+        .failure();
+}
+
+#[test]
+fn network_suite_blocks_iptables_flush() {
+    let dir = setup_with_suites();
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"iptables -F"}}"#)
+        .assert()
+        .failure();
+}
+
+// ── SQL comment bypass via CLI ──────────────────────────────
+
+#[test]
+fn check_blocks_sql_comment_bypass() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"psql -c 'DROP/**/TABLE users'"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("block"));
+}
+
+// ── Nix store path normalization via CLI ─────────────────────
+
+#[test]
+fn check_blocks_nix_wrapped_rm() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"/nix/store/abc123-coreutils-9.0/bin/rm -rf /"}}"#)
+        .assert()
+        .failure();
+}
+
+#[test]
+fn check_allows_nix_safe_command() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"/nix/store/abc-foo-1.0/bin/crate2nix generate"}}"#)
+        .assert()
+        .success();
+}
+
+// ── Force push variants via CLI ─────────────────────────────
+
+#[test]
+fn check_blocks_force_push_main() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}"#)
+        .assert()
+        .failure();
+}
+
+#[test]
+fn check_allows_force_push_feature() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"git push --force origin feature-xyz"}}"#)
+        .assert()
+        .success();
+}
+
+// ── Config disabling rules via CLI ──────────────────────────
+
+#[test]
+fn disabled_rule_allows_previously_blocked() {
+    let dir = TempDir::new().unwrap();
+    let config_dir = dir.path().join("guardrail");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::write(config_dir.join("guardrail.yaml"), r#"
+disabledRules:
+  - rm-rf-root
+"#).unwrap();
+
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#)
+        .assert()
+        .success();
+}
+
+#[test]
+fn disabled_category_allows_all_rules_in_category() {
+    let dir = TempDir::new().unwrap();
+    let config_dir = dir.path().join("guardrail");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::write(config_dir.join("guardrail.yaml"), r#"
+categories:
+  filesystem: false
+"#).unwrap();
+
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#)
+        .assert()
+        .success();
+}
