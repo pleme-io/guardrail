@@ -364,4 +364,188 @@ mod tests {
         assert!(!has_script_extension("binary"));
         assert!(!has_script_extension("file.txt"));
     }
+
+    // ── extract_executed_paths edge cases ────────────────────────
+
+    #[test]
+    fn extract_paths_empty_command() {
+        let paths = extract_executed_paths("");
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn extract_paths_whitespace_only() {
+        let paths = extract_executed_paths("   ");
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn extract_paths_multiple_interpreters() {
+        let paths = extract_executed_paths("bash /tmp/a.sh && python3 /tmp/b.py");
+        assert!(paths.contains(&"/tmp/a.sh".to_owned()));
+        assert!(paths.contains(&"/tmp/b.py".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_ruby_interpreter() {
+        let paths = extract_executed_paths("ruby /opt/script.rb");
+        assert!(paths.contains(&"/opt/script.rb".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_perl_interpreter() {
+        let paths = extract_executed_paths("perl /opt/script.pl");
+        assert!(paths.contains(&"/opt/script.pl".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_zsh_interpreter() {
+        let paths = extract_executed_paths("zsh ./setup.zsh");
+        assert!(paths.contains(&"./setup.zsh".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_sh_interpreter() {
+        let paths = extract_executed_paths("sh /tmp/run.sh");
+        assert!(paths.contains(&"/tmp/run.sh".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_no_flag_args() {
+        let paths = extract_executed_paths("python3 -u -B script.py");
+        // "script.py" is not path-like (no leading / ./ ~/) so only interpreter match
+        assert!(paths.contains(&"script.py".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_bare_word_not_path() {
+        let paths = extract_executed_paths("echo hello world");
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn extract_paths_direct_bash_extension() {
+        let paths = extract_executed_paths("/usr/local/bin/setup.bash");
+        assert!(paths.contains(&"/usr/local/bin/setup.bash".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_multiple_direct_scripts() {
+        let paths = extract_executed_paths("./a.sh && ./b.py && ./c.rb");
+        assert!(paths.contains(&"./a.sh".to_owned()));
+        assert!(paths.contains(&"./b.py".to_owned()));
+        assert!(paths.contains(&"./c.rb".to_owned()));
+    }
+
+    // ── Journal record + prune interaction ──────────────────────
+
+    #[test]
+    fn record_auto_prunes() {
+        let mut journal = WriteJournal::default();
+        journal.entries.insert(
+            "/tmp/old.sh".to_owned(),
+            JournalEntry { dangerous: true, timestamp: 1000 },
+        );
+        // record should prune the stale entry
+        journal.record("/tmp/new.sh", true);
+        assert!(!journal.entries.contains_key("/tmp/old.sh"));
+        assert!(journal.entries.contains_key("/tmp/new.sh"));
+    }
+
+    #[test]
+    fn record_multiple_files() {
+        let mut journal = WriteJournal::default();
+        journal.record("/tmp/a.sh", true);
+        journal.record("/tmp/b.sh", false);
+        journal.record("/tmp/c.sh", true);
+        assert_eq!(journal.entries.len(), 3);
+        assert!(journal.is_dangerous("/tmp/a.sh"));
+        assert!(!journal.is_dangerous("/tmp/b.sh"));
+        assert!(journal.is_dangerous("/tmp/c.sh"));
+    }
+
+    #[test]
+    fn prune_all_expired() {
+        let mut journal = WriteJournal::default();
+        journal.entries.insert(
+            "/tmp/a.sh".to_owned(),
+            JournalEntry { dangerous: true, timestamp: 100 },
+        );
+        journal.entries.insert(
+            "/tmp/b.sh".to_owned(),
+            JournalEntry { dangerous: true, timestamp: 200 },
+        );
+        journal.prune();
+        assert!(journal.entries.is_empty());
+    }
+
+    #[test]
+    fn prune_keeps_fresh() {
+        let mut journal = WriteJournal::default();
+        let now = now_secs();
+        journal.entries.insert(
+            "/tmp/fresh.sh".to_owned(),
+            JournalEntry { dangerous: true, timestamp: now },
+        );
+        journal.prune();
+        assert_eq!(journal.entries.len(), 1);
+    }
+
+    // ── Journal disk operations ─────────────────────────────────
+
+    #[test]
+    fn journal_save_creates_parent_dirs() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("deep/nested/journal.json");
+        let journal = WriteJournal::default();
+        journal.save_to(&path).unwrap();
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn journal_round_trip_preserves_timestamps() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("ts-test.json");
+        let now = now_secs();
+
+        let mut journal = WriteJournal::default();
+        journal.entries.insert(
+            "/tmp/ts.sh".to_owned(),
+            JournalEntry { dangerous: true, timestamp: now },
+        );
+        journal.save_to(&path).unwrap();
+
+        let loaded = WriteJournal::load_from(&path);
+        let entry = loaded.entries.get("/tmp/ts.sh").unwrap();
+        assert_eq!(entry.timestamp, now);
+        assert!(entry.dangerous);
+    }
+
+    // ── is_path_like edge cases ─────────────────────────────────
+
+    #[test]
+    fn is_path_like_edge_cases() {
+        assert!(!is_path_like(""));
+        assert!(!is_path_like("-"));
+        assert!(!is_path_like("~notapath"));
+        assert!(is_path_like("~/"));
+        assert!(!is_path_like("relative/path"));
+    }
+
+    // ── has_script_extension edge cases ──────────────────────────
+
+    #[test]
+    fn has_script_extension_all_types() {
+        for ext in SCRIPT_EXTENSIONS {
+            let filename = format!("test{ext}");
+            assert!(has_script_extension(&filename), "expected {filename} to have script extension");
+        }
+    }
+
+    #[test]
+    fn has_script_extension_false_positives() {
+        assert!(!has_script_extension("file.pyc"));
+        assert!(!has_script_extension("file.shell"));
+        assert!(!has_script_extension("file.rs"));
+    }
 }

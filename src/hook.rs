@@ -428,6 +428,124 @@ mod tests {
         );
     }
 
+    // ── Tool input edge cases ────────────────────────────────
+
+    #[test]
+    fn extract_bash_no_command() {
+        let json = r#"{"tool_name": "Bash", "tool_input": {}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn extract_write_no_content() {
+        let json = r#"{"tool_name": "Write", "tool_input": {"file_path": "/tmp/test"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn extract_edit_no_new_string() {
+        let json = r#"{"tool_name": "Edit", "tool_input": {"file_path": "/tmp/test", "old_string": "old"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn extract_notebook_no_new_source() {
+        let json = r#"{"tool_name": "NotebookEdit", "tool_input": {"cell_index": 0}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn extract_unknown_tool_empty() {
+        let json = r#"{"tool_name": "SomeNewTool", "tool_input": {"data": "rm -rf /"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn extract_no_tool_name() {
+        let json = r#"{"tool_input": {"command": "rm -rf /"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty(), "missing tool_name should match no branch");
+    }
+
+    // ── MCP nested arrays ───────────────────────────────────────
+
+    #[test]
+    fn mcp_nested_array_strings() {
+        let json = r#"{"tool_name": "mcp__test__arr", "tool_input": {"commands": ["rm -rf /", "ls -la"]}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.iter().any(|i| i.text == "rm -rf /"));
+        assert!(items.iter().any(|i| i.text == "ls -la"));
+    }
+
+    #[test]
+    fn mcp_nested_object_strings() {
+        let json = r#"{"tool_name": "mcp__test__obj", "tool_input": {"config": {"cmd": "terraform destroy", "env": "prod"}}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.iter().any(|i| i.text == "terraform destroy"));
+        assert!(items.iter().any(|i| i.text == "prod"));
+    }
+
+    #[test]
+    fn mcp_empty_string_skipped() {
+        let json = r#"{"tool_name": "mcp__test__empty", "tool_input": {"field": ""}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty(), "empty strings should be skipped");
+    }
+
+    #[test]
+    fn mcp_non_string_values_skipped() {
+        let json = r#"{"tool_name": "mcp__test__types", "tool_input": {"num": 42, "bool": true, "null_val": null}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let items = extract_scannable_content(&input);
+        assert!(items.is_empty(), "non-string JSON values should be skipped");
+    }
+
+    // ── parse_reader edge cases ─────────────────────────────────
+
+    #[test]
+    fn parse_reader_empty_string_is_error() {
+        let result = parse_reader("".as_bytes());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_reader_null_fields() {
+        let json = r#"{"tool_name": null, "tool_input": null}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        assert!(input.tool_name.is_none());
+        assert!(input.tool_input.is_none());
+    }
+
+    // ── scan_content_lines edge cases ───────────────────────────
+
+    #[test]
+    fn scan_content_lines_only_comments() {
+        let content = "# comment 1\n# comment 2\n// js comment\n";
+        assert!(scan_content_lines(content).is_empty());
+    }
+
+    #[test]
+    fn scan_content_lines_indented_dangerous() {
+        let content = "  rm -rf /tmp  ";
+        let lines = scan_content_lines(content);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], "rm -rf /tmp");
+    }
+
     #[test]
     fn scan_content_lines_prefilter_optimization() {
         // Safe lines are skipped by prefilter — no String allocation
