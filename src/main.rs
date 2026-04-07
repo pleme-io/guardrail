@@ -104,6 +104,7 @@ fn check_content_item(engine: &RegexEngine, content: &str) -> bool {
                 dangerous = true;
                 eprintln!("guardrail [{rule}]: {message}");
             }
+            _ => {}
         }
     }
     dangerous
@@ -124,6 +125,7 @@ fn check_command_item(engine: &RegexEngine, item: &hook::ScannableContent) {
         Decision::Warn { rule, message } => {
             eprintln!("guardrail [{rule}]: {message}");
         }
+        _ => {}
     }
 }
 
@@ -218,6 +220,7 @@ fn cmd_list() -> Result<()> {
         let sev = match rule.severity {
             guardrail::Severity::Block => "BLOCK",
             guardrail::Severity::Warn => "WARN ",
+            _ => "OTHER",
         };
         eprintln!("[{sev}] {:<30} {}  {}", rule.name, rule.category, rule.message);
     }

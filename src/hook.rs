@@ -31,6 +31,7 @@ pub struct ToolInput {
 
 /// What kind of content is being scanned — determines severity behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ScanContext {
     /// Shell command — Block decisions enforced.
     BashCommand,
