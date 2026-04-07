@@ -30,13 +30,11 @@ pub trait RuleEngine {
 // ═══════════════════════════════════════════════════════════════════
 
 static SQL_BLOCK_COMMENT_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"/\*.*?\*/").unwrap());
+    LazyLock::new(|| regex::Regex::new(r"/\*.*?\*/").expect("SQL block comment regex is valid"));
 
 static SQL_LINE_COMMENT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    // Match SQL line comments: `-- text` where the text doesn't start with `-`
-    // (to avoid matching CLI `-- --flag` patterns).
-    // Requires `--` preceded by start-of-line or whitespace, followed by space + non-dash.
-    regex::Regex::new(r"(?m)(?:^|[ \t])-- [^-].*$").unwrap()
+    regex::Regex::new(r"(?m)(?:^|[ \t])-- [^-].*$")
+        .expect("SQL line comment regex is valid")
 });
 
 /// Strips SQL block comments (`/* ... */`) and line comments (`-- ...`).
