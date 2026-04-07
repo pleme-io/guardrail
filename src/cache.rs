@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::{env, fs};
+use std::fs;
 
 // Re-export hayai cache types
 pub use hayai::cache::{CacheStore, FixedFingerprinter, Fingerprinter, MemCache, resolve_cached};
@@ -21,10 +21,7 @@ pub struct FsCache {
 impl FsCache {
     #[must_use]
     pub fn default_path() -> PathBuf {
-        env::var("XDG_CACHE_HOME").map_or_else(
-            |_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(".cache"),
-            PathBuf::from,
-        )
+        crate::config::xdg_dir("XDG_CACHE_HOME", ".cache")
             .join("guardrail/compiled.json")
     }
 }

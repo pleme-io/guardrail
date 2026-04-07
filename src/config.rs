@@ -5,6 +5,19 @@ use anyhow::Context;
 
 use crate::model::{GuardrailConfig, Rule};
 
+/// Resolve an XDG base directory, falling back to `$HOME/<fallback_suffix>`.
+///
+/// Used by config, cache, and journal modules to locate guardrail directories
+/// via the XDG Base Directory Specification.
+#[must_use]
+pub fn xdg_dir(env_var: &str, fallback_suffix: &str) -> PathBuf {
+    env::var(env_var)
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            PathBuf::from(env::var("HOME").unwrap_or_default()).join(fallback_suffix)
+        })
+}
+
 const DEFAULTS_YAML: &str = include_str!("../rules/defaults.yaml");
 
 // ═══════════════════════════════════════════════════════════════════
@@ -144,11 +157,7 @@ pub fn config_path() -> PathBuf {
 /// Shikumi config directory: `~/.config/guardrail/`
 #[must_use]
 pub fn config_dir() -> PathBuf {
-    env::var("XDG_CONFIG_HOME").map_or_else(
-        |_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(".config"),
-        PathBuf::from,
-    )
-        .join("guardrail")
+    xdg_dir("XDG_CONFIG_HOME", ".config").join("guardrail")
 }
 
 /// Rules.d directory: `~/.config/guardrail/rules.d/`
@@ -552,6 +561,25 @@ extraRules:
         assert!(
             dir.ends_with("rules.d"),
             "rules_dir should end with rules.d, got: {}",
+            dir.display()
+        );
+    }
+
+    #[test]
+    fn xdg_dir_uses_env_var_when_set() {
+        let dir = xdg_dir("HOME", ".fallback");
+        assert!(
+            !dir.to_string_lossy().is_empty(),
+            "xdg_dir should return a non-empty path"
+        );
+    }
+
+    #[test]
+    fn xdg_dir_fallback_includes_suffix() {
+        let dir = xdg_dir("NONEXISTENT_XDG_VAR_FOR_TEST_12345", ".some-fallback");
+        assert!(
+            dir.to_string_lossy().contains(".some-fallback"),
+            "expected fallback suffix in path, got: {}",
             dir.display()
         );
     }
