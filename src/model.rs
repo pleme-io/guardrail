@@ -156,6 +156,36 @@ impl fmt::Display for Decision {
     }
 }
 
+impl Decision {
+    /// Returns `true` if this decision allows the command.
+    #[must_use]
+    pub const fn is_allowed(&self) -> bool {
+        matches!(self, Self::Allow)
+    }
+
+    /// Returns `true` if this decision blocks the command.
+    #[must_use]
+    pub const fn is_blocked(&self) -> bool {
+        matches!(self, Self::Block { .. })
+    }
+
+    /// Create a Block or Warn decision from a rule, based on its severity.
+    #[must_use]
+    pub fn from_rule(rule: &Rule) -> Self {
+        match rule.severity {
+            Severity::Block => Self::Block {
+                rule: rule.name.clone(),
+                message: rule.message.clone(),
+            },
+            Severity::Warn => Self::Warn {
+                rule: rule.name.clone(),
+                message: rule.message.clone(),
+            },
+            _ => Self::Allow,
+        }
+    }
+}
+
 // ── Builder ─────────────────────────────────────────────────────
 
 /// Fluent builder for constructing `Rule` values (primarily for tests).
@@ -414,6 +444,45 @@ mod tests {
         let d = Decision::Warn { rule: "r".into(), message: "m".into() };
         let cloned = d.clone();
         assert_eq!(d, cloned);
+    }
+
+    #[test]
+    fn decision_is_allowed() {
+        assert!(Decision::Allow.is_allowed());
+        assert!(!Decision::Block { rule: "r".into(), message: "m".into() }.is_allowed());
+        assert!(!Decision::Warn { rule: "r".into(), message: "m".into() }.is_allowed());
+    }
+
+    #[test]
+    fn decision_is_blocked() {
+        assert!(!Decision::Allow.is_blocked());
+        assert!(Decision::Block { rule: "r".into(), message: "m".into() }.is_blocked());
+        assert!(!Decision::Warn { rule: "r".into(), message: "m".into() }.is_blocked());
+    }
+
+    #[test]
+    fn decision_from_rule_block() {
+        let rule = Rule::builder("test", "pat")
+            .severity(Severity::Block)
+            .message("danger")
+            .build();
+        let d = Decision::from_rule(&rule);
+        assert!(d.is_blocked());
+        assert_eq!(
+            d,
+            Decision::Block { rule: "test".into(), message: "danger".into() }
+        );
+    }
+
+    #[test]
+    fn decision_from_rule_warn() {
+        let rule = Rule::builder("test", "pat")
+            .severity(Severity::Warn)
+            .message("careful")
+            .build();
+        let d = Decision::from_rule(&rule);
+        assert!(!d.is_blocked());
+        assert!(!d.is_allowed());
     }
 
     // ── Rule ────────────────────────────────────────────────────

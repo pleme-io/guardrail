@@ -271,31 +271,18 @@ impl<N: Normalizer, P: Prefilter> RuleEngine for RegexEngine<N, P> {
             return Decision::Allow;
         }
 
-        // Block takes priority -- early-exit on first Block match.
         let mut best_warn: Option<&Rule> = None;
 
         for idx in matches {
             let rule = &self.rules[idx];
             match rule.severity {
-                Severity::Block => {
-                    return Decision::Block {
-                        rule: rule.name.clone(),
-                        message: rule.message.clone(),
-                    };
-                }
+                Severity::Block => return Decision::from_rule(rule),
                 Severity::Warn if best_warn.is_none() => best_warn = Some(rule),
                 Severity::Warn => {}
             }
         }
 
-        if let Some(rule) = best_warn {
-            return Decision::Warn {
-                rule: rule.name.clone(),
-                message: rule.message.clone(),
-            };
-        }
-
-        Decision::Allow
+        best_warn.map_or(Decision::Allow, Decision::from_rule)
     }
 
     fn rules(&self) -> &[Rule] {
