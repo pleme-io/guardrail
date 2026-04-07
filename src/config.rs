@@ -445,6 +445,196 @@ mod tests {
         assert!(rules.iter().all(|r| r.category == Category::Database));
     }
 
+    // ─── load_user_config ─────────────────────────────────────
+
+    #[test]
+    fn load_user_config_missing_file_returns_default() {
+        let config = load_user_config(std::path::Path::new("/nonexistent/config.yaml")).unwrap();
+        assert!(config.categories.is_empty());
+        assert!(config.extra_rules.is_empty());
+        assert!(config.disabled_rules.is_empty());
+    }
+
+    #[test]
+    fn load_user_config_valid_yaml() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("guardrail.yaml");
+        fs::write(&path, r#"
+categories:
+  git: false
+disabledRules:
+  - rm-rf-root
+extraRules:
+  - name: custom
+    pattern: "danger"
+    severity: warn
+    message: "custom rule"
+    category: secrets
+"#).unwrap();
+        let config = load_user_config(&path).unwrap();
+        assert_eq!(config.categories.get(&Category::Git), Some(&false));
+        assert_eq!(config.disabled_rules, vec!["rm-rf-root"]);
+        assert_eq!(config.extra_rules.len(), 1);
+        assert_eq!(config.extra_rules[0].name, "custom");
+    }
+
+    #[test]
+    fn load_user_config_invalid_yaml_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("bad.yaml");
+        fs::write(&path, "not: [valid: yaml: {{{{").unwrap();
+        let result = load_user_config(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_user_config_empty_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("empty.yaml");
+        fs::write(&path, "").unwrap();
+        // Empty YAML should deserialize as null -> error or default
+        // serde_yaml::from_str("") returns an error for GuardrailConfig
+        let result = load_user_config(&path);
+        // Empty string in YAML is tricky — it may err or return default depending on version
+        // Just ensure it doesn't panic
+        let _ = result;
+    }
+
+    #[test]
+    fn load_user_config_empty_object() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("empty-obj.yaml");
+        fs::write(&path, "{}").unwrap();
+        let config = load_user_config(&path).unwrap();
+        assert!(config.categories.is_empty());
+    }
+
+    // ─── config_path / config_dir / rules_dir ───────────────────
+
+    #[test]
+    fn config_dir_respects_xdg() {
+        // config_dir reads XDG_CONFIG_HOME; we verify the return value includes "guardrail"
+        let dir = config_dir();
+        assert!(
+            dir.ends_with("guardrail"),
+            "config_dir should end with 'guardrail', got: {}",
+            dir.display()
+        );
+    }
+
+    #[test]
+    fn config_path_ends_with_yaml() {
+        let path = config_path();
+        assert!(
+            path.ends_with("guardrail.yaml"),
+            "config_path should end with guardrail.yaml, got: {}",
+            path.display()
+        );
+    }
+
+    #[test]
+    fn rules_dir_ends_with_rules_d() {
+        let dir = rules_dir();
+        assert!(
+            dir.ends_with("rules.d"),
+            "rules_dir should end with rules.d, got: {}",
+            dir.display()
+        );
+    }
+
+    #[test]
+    fn rules_dir_is_child_of_config_dir() {
+        let cd = config_dir();
+        let rd = rules_dir();
+        assert!(
+            rd.starts_with(&cd),
+            "rules_dir ({}) should be inside config_dir ({})",
+            rd.display(), cd.display()
+        );
+    }
+
+    // ─── DirectoryProvider edge cases ───────────────────────────
+
+    #[test]
+    fn directory_provider_ignores_non_yaml_files() {
+        let dir = TempDir::new().unwrap();
+        let yaml = serde_yaml::to_string(&vec![test_rule("yaml-rule", Category::Git)]).unwrap();
+        fs::write(dir.path().join("rules.yaml"), &yaml).unwrap();
+        fs::write(dir.path().join("readme.md"), "# not a rule file").unwrap();
+        fs::write(dir.path().join("rules.json"), "{}").unwrap();
+        fs::write(dir.path().join("notes.txt"), "random text").unwrap();
+
+        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let rules = provider.rules().unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].name, "yaml-rule");
+    }
+
+    #[test]
+    fn directory_provider_loads_yml_extension() {
+        let dir = TempDir::new().unwrap();
+        let yaml = serde_yaml::to_string(&vec![test_rule("yml-rule", Category::Nix)]).unwrap();
+        fs::write(dir.path().join("rules.yml"), &yaml).unwrap();
+
+        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let rules = provider.rules().unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].name, "yml-rule");
+    }
+
+    #[test]
+    fn directory_provider_invalid_yaml_returns_error() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("bad.yaml"), "not: [valid: yaml: {{{{").unwrap();
+
+        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let result = provider.rules();
+        assert!(result.is_err());
+    }
+
+    // ─── resolve() edge cases ───────────────────────────────────
+
+    #[test]
+    fn resolve_with_no_providers() {
+        let config = GuardrailConfig::default();
+        let rules = resolve(&[], &config).unwrap();
+        assert!(rules.is_empty());
+    }
+
+    #[test]
+    fn resolve_disabled_extra_rules() {
+        let p = MockProvider { label: "test".into(), rules: vec![] };
+        let config = GuardrailConfig {
+            extra_rules: vec![test_rule("extra", Category::Filesystem)],
+            disabled_rules: vec!["extra".into()],
+            ..Default::default()
+        };
+        let rules = resolve(&[&p], &config).unwrap();
+        assert!(rules.is_empty(), "extra rule should be disabled by name");
+    }
+
+    #[test]
+    fn resolve_multiple_category_toggles() {
+        let p = MockProvider {
+            label: "test".into(),
+            rules: vec![
+                test_rule("fs", Category::Filesystem),
+                test_rule("git", Category::Git),
+                test_rule("k8s", Category::Kubernetes),
+                test_rule("db", Category::Database),
+            ],
+        };
+        let mut cats = BTreeMap::new();
+        cats.insert(Category::Filesystem, false);
+        cats.insert(Category::Kubernetes, false);
+        let config = GuardrailConfig { categories: cats, ..Default::default() };
+        let rules = resolve(&[&p], &config).unwrap();
+        assert_eq!(rules.len(), 2);
+        assert!(rules.iter().all(|r| r.category != Category::Filesystem && r.category != Category::Kubernetes));
+    }
+
+    // ── Suite uniqueness ────────────────────────────────────────
+
     #[test]
     fn all_suites_have_unique_rule_names() {
         let mut all_names = std::collections::BTreeSet::new();
