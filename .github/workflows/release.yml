@@ -30,7 +30,7 @@ jobs:
       - name: Build
         run: |
           cargo build --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/guardrail ../guardrail-${{ matrix.slug }}
+          cp target/${{ matrix.target }}/release/guardrail ./guardrail-${{ matrix.slug }}
           if command -v shasum &> /dev/null; then
             shasum -a 256 guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
           else
