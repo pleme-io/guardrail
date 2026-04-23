@@ -1,0 +1,62 @@
+name: release
+
+on:
+  push:
+    tags: ["guardrail-v*"]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: ${{ matrix.slug }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - slug: darwin-arm64
+            runner: macos-14
+            target: aarch64-apple-darwin
+          - slug: linux-x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - slug: linux-arm64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/guardrail ../guardrail-${{ matrix.slug }}
+          shasum -a 256 guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardrail-${{ matrix.slug }}
+          path: guardrail-${{ matrix.slug }}*
+          retention-days: 90
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/guardrail-*
