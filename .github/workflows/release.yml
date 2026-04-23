@@ -19,9 +19,6 @@ jobs:
           - slug: linux-x86_64
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - slug: linux-arm64
-            runner: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +31,11 @@ jobs:
         run: |
           cargo build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/guardrail ../guardrail-${{ matrix.slug }}
-          shasum -a 256 guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
+          if command -v shasum &> /dev/null; then
+            shasum -a 256 guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
+          else
+            sha256sum guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
+          fi
 
       - name: Upload
         uses: actions/upload-artifact@v4
