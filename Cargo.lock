@@ -247,7 +247,8 @@ checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 [[package]]
 name = "hayai"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/hayai?tag=hayai-v0.1.4#11430190e29fbac1a19967a84dba5c51ce5ffa90"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3f2bcf3b16f850af1053b45eb84d7224c5eff922e84506304beeff115df9932"
 dependencies = [
  "regex",
  "serde",
