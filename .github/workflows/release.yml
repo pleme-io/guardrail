@@ -65,29 +65,27 @@ jobs:
   crates:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            secrets.yaml
-            .sops.yaml
-          sparse-checkout-cone-mode: false
-          repository: pleme-io/nix
+      - name: Fetch SOPS secrets
+        run: |
+          mkdir -p .sops
+          gh api repos/pleme-io/nix/contents/secrets.yaml > .sops/secrets.enc.yaml
+          gh api repos/pleme-io/nix/contents/.sops.yaml > .sops/.sops.yaml
 
       - uses: cachix/install-nix-action@v25
         with:
-          nix_path: nixpkgs#sops nixpkgs#yq
+          nix_path: nixpkgs#sops
 
       - name: Decrypt secrets
-        env:
-          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-        run: |
-          sops decrypt secrets.yaml > decrypted.yaml
+        run: sops decrypt --config .sops/.sops.yaml .sops/secrets.enc.yaml > secrets.yaml
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install yq
+        run: |
+          curl -sL https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64 -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
 
       - name: Publish to crates.io
         env:
@@ -96,6 +94,6 @@ jobs:
           if [ -n "$CRATES_API_TOKEN" ]; then
             cargo publish
           else
-            TOKEN=$(yq '.crates["publish-token"]' decrypted.yaml)
+            TOKEN=$(yq '.crates["publish-token"]' secrets.yaml)
             CARGO_REGISTRY_TOKEN="$TOKEN" cargo publish
           fi
