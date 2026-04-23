@@ -67,6 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Fetch SOPS secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p .sops
           gh api repos/pleme-io/nix/contents/secrets.yaml > .sops/secrets.enc.yaml
