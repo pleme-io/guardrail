@@ -67,7 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
     steps:
       - name: Fetch SOPS secrets
         run: |
@@ -77,28 +76,29 @@ jobs:
           curl -s -H "Authorization: Bearer ${{ github.token }}" \
             https://api.github.com/repos/pleme-io/nix/contents/.sops.yaml > .sops/.sops.yaml
 
-      - uses: cachix/install-nix-action@v25
-        with:
-          nix_path: nixpkgs#sops
+      - name: Install SOPS
+        uses: nicklas枉/sops-action@v3
 
       - name: Decrypt secrets
-        run: sops decrypt --config .sops/.sops.yaml .sops/secrets.enc.yaml > secrets.yaml
+        env:
+          SOPS_AGE_KEY: ${{ secrets.AGE }}
+        run: sops decrypt .sops/secrets.enc.yaml > secrets.yaml
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install yq
+      - name: Install Rust + yq
         run: |
-          curl -sL https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64 -o /usr/local/bin/yq
-          chmod +x /usr/local/bin/yq
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          wget https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64 -O /tmp/yq && chmod +x /tmp/yq
 
       - name: Publish to crates.io
         env:
           CRATES_API_TOKEN: ${{ secrets.CRATES_API_TOKEN }}
         run: |
+          source "$HOME/.cargo/env"
+          export PATH="/tmp:$PATH"
           if [ -n "$CRATES_API_TOKEN" ]; then
             cargo publish
           else
-            TOKEN=$(yq '.crates["publish-token"]' secrets.yaml)
+            TOKEN=$(/tmp/yq '.crates["publish-token"]' secrets.yaml)
             CARGO_REGISTRY_TOKEN="$TOKEN" cargo publish
           fi
