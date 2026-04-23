@@ -3,7 +3,7 @@ use std::process;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
-use guardrail::cache::{self, FsCache, FsFingerprinter};
+use guardrail::cache::{self, FsCache, FsFingerprinter, HayaiError};
 use guardrail::{CacheStore, Fingerprinter};
 use guardrail::config::{self, DefaultsProvider, DirectoryProvider, RuleProvider};
 use guardrail::hook::ScanContext;
@@ -41,13 +41,16 @@ fn fs_fingerprinter() -> FsFingerprinter {
     }
 }
 
-fn resolve_all_rules() -> Result<Vec<Rule>> {
+fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
     let defaults = DefaultsProvider;
     let rules_d = DirectoryProvider { dir: config::rules_dir() };
     let user_config = config::load_user_config(&config::config_path())
-        .context("loading guardrail config")?;
+        .context("loading guardrail config")
+        .map_err(|e| HayaiError::Io { source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()) })?;
     let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
-    config::resolve(&providers, &user_config).context("resolving rules")
+    config::resolve(&providers, &user_config)
+        .context("resolving rules")
+        .map_err(|e| HayaiError::Io { source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()) })
 }
 
 fn build_engine() -> Result<RegexEngine> {

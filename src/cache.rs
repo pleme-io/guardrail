@@ -3,6 +3,7 @@ use std::fs;
 
 // Re-export hayai cache types
 pub use hayai::cache::{CacheStore, FixedFingerprinter, Fingerprinter, MemCache, resolve_cached};
+pub use hayai::HayaiError;
 
 use crate::model::Rule;
 
@@ -33,15 +34,15 @@ impl CacheStore<Vec<Rule>> for FsCache {
         Some((entry.fingerprint, entry.rules))
     }
 
-    fn save(&self, fingerprint: u64, data: &Vec<Rule>) -> anyhow::Result<()> {
+    fn save(&self, fingerprint: u64, data: &Vec<Rule>) -> Result<(), HayaiError> {
         if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).map_err(|e| HayaiError::Io { source: e })?;
         }
         let entry = FsCacheEntry {
             fingerprint,
             rules: data.clone(),
         };
-        fs::write(&self.path, serde_json::to_vec(&entry)?)?;
+        fs::write(&self.path, serde_json::to_vec(&entry).map_err(|e| HayaiError::Json { source: e })?)?;
         Ok(())
     }
 }
