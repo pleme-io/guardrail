@@ -84,7 +84,10 @@ jobs:
       - name: Decrypt secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.AGE }}
-        run: /tmp/sops decrypt .sops/secrets.enc.yaml > secrets.yaml
+        run: |
+          ls -la .sops/
+          cat .sops/.sops.yaml
+          /tmp/sops decrypt .sops/secrets.enc.yaml > secrets.yaml
 
       - name: Install Rust + yq
         run: |
