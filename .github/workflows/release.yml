@@ -70,12 +70,20 @@ jobs:
       actions: read
     steps:
       - name: Fetch SOPS secrets
-        env:
-          GH_TOKEN: ${{ github.token }}
+        uses: actions/checkout@v4
+        with:
+          repository: pleme-io/nix
+          path: .sops-repo
+          sparse-checkout: |
+            secrets.yaml
+            .sops.yaml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Copy SOPS files
         run: |
-          mkdir -p .sops
-          gh api repos/pleme-io/nix/contents/secrets.yaml > .sops/secrets.enc.yaml
-          gh api repos/pleme-io/nix/contents/.sops.yaml > .sops/.sops.yaml
+          cp .sops-repo/secrets.yaml .sops/secrets.enc.yaml
+          cp .sops-repo/.sops.yaml .sops/.sops.yaml
 
       - name: Install SOPS
         run: |
