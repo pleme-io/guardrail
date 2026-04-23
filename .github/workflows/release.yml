@@ -61,3 +61,39 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release/guardrail-*
+
+  crates:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            secrets.yaml
+            .sops.yaml
+          sparse-checkout-cone-mode: false
+          repository: pleme-io/nix
+
+      - uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs#sops nixpkgs#yq
+
+      - name: Decrypt secrets
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          sops decrypt secrets.yaml > decrypted.yaml
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to crates.io
+        env:
+          CRATES_API_TOKEN: ${{ secrets.CRATES_API_TOKEN }}
+        run: |
+          if [ -n "$CRATES_API_TOKEN" ]; then
+            cargo publish
+          else
+            TOKEN=$(yq '.crates["publish-token"]' decrypted.yaml)
+            CARGO_REGISTRY_TOKEN="$TOKEN" cargo publish
+          fi
