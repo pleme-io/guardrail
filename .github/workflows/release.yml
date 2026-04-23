@@ -65,54 +65,13 @@ jobs:
   crates:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
     steps:
-      - name: Fetch SOPS secrets
-        uses: actions/checkout@v4
-        with:
-          repository: pleme-io/nix
-          path: .sops-repo
-          sparse-checkout: |
-            secrets.yaml
-            .sops.yaml
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
+      - uses: actions/checkout@v4
 
-      - name: Copy SOPS files
-        run: |
-          cp .sops-repo/secrets.yaml .sops/secrets.enc.yaml
-          cp .sops-repo/.sops.yaml .sops/.sops.yaml
-
-      - name: Install SOPS
-        run: |
-          curl -L https://github.com/getsops/sops/releases/download/v3.8.0/sops-v3.8.0.linux.amd64 -o /tmp/sops
-          chmod +x /tmp/sops
-
-      - name: Decrypt secrets
-        env:
-          SOPS_AGE_KEY: ${{ secrets.AGE }}
-        run: |
-          ls -la .sops/
-          cat .sops/.sops.yaml
-          /tmp/sops decrypt .sops/secrets.enc.yaml > secrets.yaml
-
-      - name: Install Rust + yq
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source "$HOME/.cargo/env"
-          wget https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64 -O /tmp/yq && chmod +x /tmp/yq
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Publish to crates.io
         env:
-          CRATES_API_TOKEN: ${{ secrets.CRATES_API_TOKEN }}
-        run: |
-          source "$HOME/.cargo/env"
-          export PATH="/tmp:$PATH"
-          if [ -n "$CRATES_API_TOKEN" ]; then
-            cargo publish
-          else
-            TOKEN=$(/tmp/yq '.crates["publish-token"]' secrets.yaml)
-            CARGO_REGISTRY_TOKEN="$TOKEN" cargo publish
-          fi
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_API_TOKEN }}
+        run: cargo publish
