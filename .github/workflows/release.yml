@@ -77,12 +77,14 @@ jobs:
             https://api.github.com/repos/pleme-io/nix/contents/.sops.yaml > .sops/.sops.yaml
 
       - name: Install SOPS
-        uses: nicklas枉/sops-action@v3
+        run: |
+          curl -L https://github.com/getsops/sops/releases/download/v3.8.0/sops-v3.8.0.linux.amd64 -o /tmp/sops
+          chmod +x /tmp/sops
 
       - name: Decrypt secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.AGE }}
-        run: sops decrypt .sops/secrets.enc.yaml > secrets.yaml
+        run: /tmp/sops decrypt .sops/secrets.enc.yaml > secrets.yaml
 
       - name: Install Rust + yq
         run: |
