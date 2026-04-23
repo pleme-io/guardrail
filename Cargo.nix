@@ -806,19 +806,10 @@ rec {
       };
       "hayai" = rec {
         crateName = "hayai";
-        version = "0.1.0";
+        version = "0.1.1";
         edition = "2024";
-        workspace_member = null;
-        src = pkgs.fetchgit {
-          url = "https://github.com/pleme-io/hayai";
-          rev = "6474cd74b21564864448afa6545d204b6a14780d";
-          sha256 = "0alw24dbj571d4bscwn7iqrg1rhac21mdv8s029s50yxdk21677c";
-        };
+        sha256 = "122z4d8va3j41l734cwf2zbvjn6f4svr4p886vfks3fbji01n654";
         dependencies = [
-          {
-            name = "anyhow";
-            packageId = "anyhow";
-          }
           {
             name = "regex";
             packageId = "regex";
@@ -831,6 +822,10 @@ rec {
           {
             name = "serde_json";
             packageId = "serde_json";
+          }
+          {
+            name = "thiserror";
+            packageId = "thiserror";
           }
         ];
 
@@ -1780,6 +1775,51 @@ rec {
         version = "0.5.1";
         edition = "2021";
         sha256 = "10s610ax6nb70yi7xfmwcb6d3wi9sj5isd0m63gy2pizr2zgwl4g";
+
+      };
+      "thiserror" = rec {
+        crateName = "thiserror";
+        version = "2.0.18";
+        edition = "2021";
+        sha256 = "1i7vcmw9900bvsmay7mww04ahahab7wmr8s925xc083rpjybb222";
+        authors = [
+          "David Tolnay <dtolnay@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "thiserror-impl";
+            packageId = "thiserror-impl";
+          }
+        ];
+        features = {
+          "default" = [ "std" ];
+        };
+        resolvedDefaultFeatures = [ "default" "std" ];
+      };
+      "thiserror-impl" = rec {
+        crateName = "thiserror-impl";
+        version = "2.0.18";
+        edition = "2021";
+        sha256 = "1mf1vrbbimj1g6dvhdgzjmn6q09yflz2b92zs1j9n3k7cxzyxi7b";
+        procMacro = true;
+        libName = "thiserror_impl";
+        authors = [
+          "David Tolnay <dtolnay@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "proc-macro2";
+            packageId = "proc-macro2";
+          }
+          {
+            name = "quote";
+            packageId = "quote";
+          }
+          {
+            name = "syn";
+            packageId = "syn";
+          }
+        ];
 
       };
       "unicode-ident" = rec {

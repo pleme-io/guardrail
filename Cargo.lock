@@ -246,9 +246,9 @@ checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "hayai"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3f2bcf3b16f850af1053b45eb84d7224c5eff922e84506304beeff115df9932"
+checksum = "a4181b4094cb0d3ddd36085d92b726ce58b9d7178e33320e0d440eb551235f88"
 dependencies = [
  "regex",
  "serde",

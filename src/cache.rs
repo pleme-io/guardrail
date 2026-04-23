@@ -309,8 +309,8 @@ mod tests {
     fn resolve_cached_propagates_resolver_error() {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(1);
-        let result = resolve_cached(&cache, &fp, || {
-            anyhow::bail!("resolver failed")
+        let result = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, HayaiError> {
+            Err(HayaiError::MutexPoisoned { context: "resolver failed".to_string() })
         });
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
@@ -321,8 +321,8 @@ mod tests {
     fn resolve_cached_resolver_error_does_not_populate_cache() {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(1);
-        let _ = resolve_cached(&cache, &fp, || -> anyhow::Result<Vec<Rule>> {
-            anyhow::bail!("boom")
+        let _ = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, HayaiError> {
+            Err(HayaiError::MutexPoisoned { context: "boom".to_string() })
         });
         assert!(cache.load().is_none(), "cache should remain empty on resolver error");
     }
