@@ -1,38 +1,18 @@
 {
   description = "guardrail — defensive guardrails for AI coding agents";
 
-  nixConfig = {
-    allow-import-from-derivation = true;
-  };
+  # Canonical pleme-io Rust-tool consumer flake. substrate.rust.tool
+  # pre-binds nixpkgs / crate2nix / flake-utils / fenix / devenv / gen
+  # — every dependency the build kit needs — so a substrate bump
+  # propagates fleet-wide without touching this file. toolName + repo
+  # are read from the typed `flake_metadata.guardrail` in
+  # Cargo.build-spec.json.
+  inputs.substrate.url = "github:pleme-io/substrate";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    crate2nix.url = "github:nix-community/crate2nix";
-    flake-utils.url = "github:numtide/flake-utils";
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    substrate = {
-      url = "github:pleme-io/substrate";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.fenix.follows = "fenix";
+  outputs = { substrate, ... }: substrate.rust.tool {
+    src = ./.;
+    module = {
+      description = "guardrail — defensive guardrails for AI coding agents";
     };
   };
-
-  outputs = {
-    self,
-    nixpkgs,
-    crate2nix,
-    flake-utils,
-    substrate,
-    ...
-  }:
-    (import "${substrate}/lib/rust-tool-release-flake.nix" {
-      inherit nixpkgs crate2nix flake-utils;
-    }) {
-      toolName = "guardrail";
-      src = self;
-      repo = "pleme-io/guardrail";
-    };
 }
