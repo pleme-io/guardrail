@@ -110,6 +110,81 @@ fn list_shows_rules() {
         .stderr(predicate::str::contains("rules active"));
 }
 
+// ── Search-nudge / search-advise (Grep|Glob) ────────────────
+
+#[test]
+fn search_advise_emits_context_for_grep() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-advise"])
+        .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"fn main"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mcp__zoekt__search"))
+        .stdout(predicate::str::contains("PostToolUse"))
+        .stdout(predicate::str::contains("additionalContext"));
+}
+
+#[test]
+fn search_advise_emits_context_for_glob() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-advise"])
+        .write_stdin(r#"{"tool_name":"Glob","tool_input":{"glob":"**/*.rs"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mcp__zoekt__search"));
+}
+
+#[test]
+fn search_advise_non_search_tool_is_silent() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-advise"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn search_advise_bad_json_exits_zero_silent() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-advise"])
+        .write_stdin("this is not json")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn search_nudge_never_denies() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-nudge"])
+        .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"SomeSymbol"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deny").not())
+        .stdout(predicate::str::contains("PreToolUse"));
+}
+
+#[test]
+fn search_nudge_bad_json_exits_zero_silent() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-nudge"])
+        .write_stdin("not json at all")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn search_nudge_non_search_tool_is_silent() {
+    Command::cargo_bin("guardrail").unwrap()
+        .args(["search-nudge"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
 // ── Suite loading via rules.d/ ──────────────────────────────
 
 #[test]

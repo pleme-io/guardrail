@@ -24,6 +24,14 @@ pub struct ToolInput {
     pub old_string: Option<String>,
     /// `NotebookEdit` tool: new cell source.
     pub new_source: Option<String>,
+    /// Grep/Glob tool: search pattern (regex or literal).
+    pub pattern: Option<String>,
+    /// Grep/Glob/Read tool: path scope for the search.
+    pub path: Option<String>,
+    /// Grep/Glob tool: glob filter (e.g. `**/*.rs`).
+    pub glob: Option<String>,
+    /// Grep tool: output mode (`content` | `files_with_matches` | `count`).
+    pub output_mode: Option<String>,
     /// Catch-all for MCP tool parameters and other unknown fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
@@ -121,10 +129,23 @@ pub fn extract_scannable_content(input: &HookInput) -> Vec<ScannableContent> {
         }
         _ if tool_name.starts_with("mcp__") => {
             McpStringCollector { items: &mut items }.collect_from_map(&tool_input.extra);
-            if let Some(cmd) = &tool_input.command {
+            // Scan the now-named string fields too. `command`/`path`/`pattern`/
+            // `glob`/`output_mode` are `#[serde]` fields (not in `extra`), so
+            // without this an MCP tool carrying a dangerous string in one of
+            // them would slip past — preserving pre-refactor parity.
+            for field in [
+                &tool_input.command,
+                &tool_input.path,
+                &tool_input.pattern,
+                &tool_input.glob,
+                &tool_input.output_mode,
+            ]
+            .into_iter()
+            .flatten()
+            {
                 items.push(ScannableContent {
                     context: ScanContext::McpCommand,
-                    text: cmd.clone(),
+                    text: field.clone(),
                 });
             }
         }
@@ -242,6 +263,25 @@ mod tests {
         let json = r#"{"tool_name": "Bash", "tool_input": {"command": "ls -la"}}"#;
         let input = parse_reader(json.as_bytes()).unwrap();
         assert_eq!(extract_command(&input), Some("ls -la"));
+    }
+
+    #[test]
+    fn parse_grep_glob_fields() {
+        let json = r#"{"tool_name":"Grep","tool_input":{"pattern":"foo","path":"src","glob":"*.rs","output_mode":"content"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        let ti = input.tool_input.unwrap();
+        assert_eq!(ti.pattern.as_deref(), Some("foo"));
+        assert_eq!(ti.path.as_deref(), Some("src"));
+        assert_eq!(ti.glob.as_deref(), Some("*.rs"));
+        assert_eq!(ti.output_mode.as_deref(), Some("content"));
+    }
+
+    #[test]
+    fn grep_glob_not_scannable() {
+        // Grep/Glob carry no directly-executable content — nothing to scan.
+        let json = r#"{"tool_name":"Grep","tool_input":{"pattern":"rm -rf /","path":"src"}}"#;
+        let input = parse_reader(json.as_bytes()).unwrap();
+        assert!(extract_scannable_content(&input).is_empty());
     }
 
     #[test]

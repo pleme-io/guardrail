@@ -28,6 +28,10 @@ enum Command {
     Validate,
     /// List all active rules.
     List,
+    /// PostToolUse advice for Grep|Glob: nudge toward `mcp__zoekt__search`.
+    SearchAdvise,
+    /// PreToolUse nudge for Grep|Glob (advisory-only; never denies — yet).
+    SearchNudge,
 }
 
 fn fs_cache() -> FsCache {
@@ -65,6 +69,8 @@ fn main() -> Result<()> {
         Command::Compile => cmd_compile(),
         Command::Validate => cmd_validate(),
         Command::List => cmd_list(),
+        Command::SearchAdvise => cmd_search_advise(),
+        Command::SearchNudge => cmd_search_nudge(),
     }
 }
 
@@ -187,6 +193,79 @@ fn emit_block(rule: &str, message: &str) -> ! {
     });
     println!("{response}");
     process::exit(1);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Search-leverage nudge — steer Grep|Glob toward mcp__zoekt__search
+// ═══════════════════════════════════════════════════════════════════
+//
+// pleme-io repos are trigram-indexed by a warm zoekt daemon. A Grep/Glob
+// over an indexed repo scans + reads whole files (~20–100K tokens) where a
+// pre-indexed `mcp__zoekt__search` lookup answers the same question for ~50.
+// These two subcommands ride the Grep|Glob hook matchers wired in
+// blackmatter-claude and nudge the agent toward the index at the decision
+// point. Both are ADVISORY-FIRST — neither ever blocks or errors the tool
+// call (always exit 0; a parse failure emits nothing).
+
+/// The Grep/Glob → zoekt redirect message, shared by both hooks.
+const SEARCH_NUDGE_MSG: &str = "That Grep/Glob ran over an indexed repo — mcp__zoekt__search (sym:Name / file:pat lang:X / regex) is a pre-indexed lookup (~50 tokens) vs scanning + reading whole files (~20–100K). Next time search first, then Read only the exact range it points to.";
+
+/// Whether a hook payload's tool is one this nudge applies to.
+///
+/// The `Grep|Glob` matcher in the hook wiring already scopes invocation, but
+/// staying defensive means a mis-wired matcher can never spam unrelated tools.
+fn is_search_tool(tool_name: Option<&str>) -> bool {
+    matches!(tool_name, Some("Grep" | "Glob"))
+}
+
+/// `PostToolUse` hook for Grep|Glob. Emits advisory context (modern hook JSON)
+/// nudging toward `mcp__zoekt__search`, then exits 0.
+///
+/// Never errors the tool call: a parse failure or a non-search tool emits
+/// nothing and still exits 0.
+fn cmd_search_advise() -> Result<()> {
+    let Ok(input) = hook::parse_stdin() else {
+        return Ok(());
+    };
+    if !is_search_tool(input.tool_name.as_deref()) {
+        return Ok(());
+    }
+    let response = serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": SEARCH_NUDGE_MSG,
+        }
+    });
+    println!("{response}");
+    Ok(())
+}
+
+/// `PreToolUse` hook for Grep|Glob. ADVISORY-ONLY for now: emits a no-op
+/// `PreToolUse` payload (no `permissionDecision`) so the tool is never blocked.
+///
+// TODO(promote-to-deny): once false-positives confirmed low, gate on
+// bare-identifier pattern (^[A-Za-z_][A-Za-z0-9_]*$) ∧ not single-file-scoped
+// (no `path` narrowing a single file) ∧ index warm -> emit
+// permissionDecision:"deny" with a redirect reason pointing at
+// mcp__zoekt__search. The Grep/Glob fields captured on ToolInput
+// (pattern/path/glob/output_mode) exist precisely so this deny path is one
+// edit away. Advisory-first is the deliberate design choice: prove the
+// signal is high before ever blocking a tool call.
+fn cmd_search_nudge() -> Result<()> {
+    let Ok(input) = hook::parse_stdin() else {
+        return Ok(());
+    };
+    if !is_search_tool(input.tool_name.as_deref()) {
+        return Ok(());
+    }
+    // No-op PreToolUse payload — no permissionDecision, so nothing is blocked.
+    let response = serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse"
+        }
+    });
+    println!("{response}");
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════
