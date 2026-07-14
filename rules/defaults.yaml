@@ -157,6 +157,22 @@
   test_block: "helm uninstall myapp -n production"
   test_allow: "helm list"
 
+- name: helm-imperative-camelot
+  pattern: 'helm\s+(install|upgrade|rollback|uninstall)\s+.*\bcamelot\b'
+  severity: block
+  message: "Camelot is FluxCD-managed only — commit a HelmRelease/values change to the Flux-reconciled repo instead of running helm directly"
+  category: kubernetes
+  test_block: "helm upgrade istio-base istio/base -n camelot -f values.yaml"
+  test_allow: "helm list -n camelot"
+
+- name: kubectl-imperative-camelot
+  pattern: 'kubectl\s+(apply|create|patch|edit|scale|label|annotate|set|delete|replace)\s+.*\bcamelot\b'
+  severity: block
+  message: "Camelot is FluxCD-managed only — commit the manifest/values change (including scale-to-zero via replicas/suspend fields) instead of a direct kubectl mutation"
+  category: kubernetes
+  test_block: "kubectl scale deployment/foo --replicas=0 -n camelot"
+  test_allow: "kubectl get pods -n camelot"
+
 # ── Nix ────────────────────────────────────────────────────────
 - name: nix-gc-delete-old
   pattern: 'nix-collect-garbage\s+-d'
