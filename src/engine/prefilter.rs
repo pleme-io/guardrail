@@ -24,7 +24,19 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     // secrets
     "sops", "echo",
     // terraform / iac
-    "terraform", "pulumi", "ansible-playbook",
+    //
+    // `tofu` is the OpenTofu binary — a drop-in successor to `terraform` and
+    // what this fleet actually invokes. Its absence here was a silent hole: the
+    // prefilter fast-rejects before the DFA runs, so ANY `tofu` rule — existing
+    // or future — never reached the engine at all. A rule that cannot be
+    // reached is a guard over zero subjects.
+    "terraform", "tofu", "pulumi", "ansible-playbook",
+    // stream editors
+    //
+    // In-place edits (`sed -i`, `perl -i`) of structured files are the class
+    // this covers: the editor cannot see the file's grammar, so it can leave
+    // something that still parses but means something else.
+    "sed", "perl", "awk",
     // akeyless
     "akeyless", "aky",
     // process

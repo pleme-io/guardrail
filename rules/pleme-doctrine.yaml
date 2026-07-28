@@ -1,0 +1,73 @@
+# pleme-io doctrine rules — absolutes from the org CLAUDE.md that are
+# expressible as a Bash-command pattern.
+#
+# WHY THESE ARE `warn` AND NOT `block`: shadow-first, the same discipline
+# breathe applies to its own actuators. A new gate is observed before it is
+# given teeth. Promote a rule to `block` once it has fired on real traffic and
+# the firings were all true positives — not before.
+#
+# EVERY RULE CARRIES A `test_allow` THAT IS PROSE DESCRIBING THE BANNED THING.
+# A detector that matches the documentation OF its own rule is a real failure
+# mode, not a hypothetical: a naive `grep format!` over egaku-term returned 5
+# hits of which 4 were doc-comments stating there is no `format!()`. A rule
+# that fires on "never use sed -i" trains the operator to bypass the gate.
+
+# ── Structured-file mutation ────────────────────────────────────────
+# The org rule: never use a stream editor to mutate a structured file (Nix,
+# YAML, TOML, Rust, JSON). It cannot see the grammar, so it silently produces
+# a file that still parses but means something else. Use a typed edit instead.
+
+- name: sed-inplace-structured-file
+  pattern: '(^|[;&|]\s*)(sed|perl)\s+(-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b[^;&|]*\.(nix|ya?ml|toml|rs|json)\b'
+  severity: warn
+  message: "In-place stream edit of a structured file — sed/perl cannot see the grammar and can leave a file that still parses but means something else. Use a typed edit (Edit/Write, or the language's own AST tooling)."
+  category: filesystem
+  test_block: "sed -i 's/foo/bar/' flake.nix"
+  test_allow: "echo 'the rule is: never use sed -i on a .nix file'"
+
+- name: sed-inplace-structured-file-chained
+  pattern: '[;&|]\s*(sed|perl)\s+(-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b[^;&|]*\.(nix|ya?ml|toml|rs|json)\b'
+  severity: warn
+  message: "In-place stream edit of a structured file, chained after another command — same grammar-blindness risk. Use a typed edit."
+  category: filesystem
+  test_block: "cd repo && sed -i.bak 's/a/b/' Cargo.toml"
+  test_allow: "cd repo && cat Cargo.toml"
+
+# ── Hand-run infrastructure execution ───────────────────────────────
+# PLATFORM-MEDIATED INFRASTRUCTURE: the operator (pangea-operator) is the sole
+# executor. A human's only two verbs are DECLARE and OBSERVE. There is no
+# "just apply it this once" — that is the path-of-least-resistance cardinal sin.
+#
+# `terraform destroy` / `apply -auto-approve` / `force-unlock` / `state rm` /
+# `taint` are already covered in defaults.yaml. These close two gaps:
+# the `tofu` binary (which is what this fleet actually invokes) is not matched
+# at all, and a plain `apply` without -auto-approve is not matched either.
+
+- name: tofu-hand-execution
+  pattern: '(^|[;&|]\s*)tofu\s+(apply|destroy|import|state\s+rm|force-unlock|taint)\b'
+  severity: warn
+  message: "Hand-run tofu against infrastructure — pangea-operator is the sole executor. Declare the change in the InfrastructureTemplate spec and let the operator reconcile; do not route around the platform."
+  category: terraform
+  test_block: "tofu apply -var-file=prod.tfvars"
+  test_allow: "tofu fmt -check"
+
+- name: terraform-apply-by-hand
+  pattern: '(^|[;&|]\s*)terraform\s+apply\b'
+  severity: warn
+  message: "Hand-run terraform apply — pangea-operator is the sole executor (the akeylesslabs/* Terragrunt estate is the documented exception). Declare and observe rather than applying directly."
+  category: terraform
+  test_block: "terraform apply"
+  test_allow: "terraform plan -out=tfplan"
+
+# ── Image building ──────────────────────────────────────────────────
+# Pillar 8: Nix only, no Dockerfiles. Production images are dockerTools output,
+# minimal/distroless by construction — a `docker build` bypasses the whole
+# supply-chain provenance argument (the closure IS the SBOM).
+
+- name: docker-build-not-nix
+  pattern: '(^|[;&|]\s*)docker\s+build\b'
+  severity: warn
+  message: "docker build — Pillar 8 is Nix-only image building (dockerTools). A Dockerfile forfeits derivable provenance: with Nix the closure IS the SBOM and removing a dep means the code was never in the artifact."
+  category: docker
+  test_block: "docker build -t myimage ."
+  test_allow: "docker images"

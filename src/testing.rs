@@ -330,6 +330,7 @@ mod tests {
             ("nosql", include_str!("../rules/nosql.yaml")),
             ("process", include_str!("../rules/process.yaml")),
             ("sql", include_str!("../rules/sql.yaml")),
+            ("pleme-doctrine", include_str!("../rules/pleme-doctrine.yaml")),
         ];
 
         let mut all = Vec::new();
