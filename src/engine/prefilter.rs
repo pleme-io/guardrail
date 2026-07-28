@@ -100,10 +100,29 @@ impl Prefilter for PrefixPrefilter {
         if trimmed.starts_with('$') || trimmed.contains('`') {
             return false;
         }
+        // Scan the first 3 words of EVERY SEGMENT, not the first 3 words of the
+        // whole command.
+        //
+        // A dangerous verb sits near the start of *its own* segment, but a
+        // chained command pushes it arbitrarily far from the start of the
+        // string. A bare `.take(3)` over the whole command therefore had a
+        // trivial bypass, confirmed live before this fix:
+        //
+        //     rm -rf /                 -> `rm` at word 1  -> blocked
+        //     true && rm -rf /         -> `rm` at word 3  -> blocked
+        //     cd /tmp && rm -rf /      -> `rm` at word 4  -> ALLOWED
+        //
+        // The last one never reached the DFA at all, so every rule in every
+        // suite was unreachable for it. Splitting on separators first keeps the
+        // cheap bounded-scan property (still at most 3 words per segment) while
+        // making position-in-the-string irrelevant.
         let has_dangerous_prefix = command
-            .split_whitespace()
-            .take(3)
-            .any(|word| PREFIX_SET.contains(word) || PREFIX_SET.iter().any(|p| word.starts_with(p)));
+            .split(|c| c == ';' || c == '&' || c == '|' || c == '\n')
+            .any(|segment| {
+                segment.split_whitespace().take(3).any(|word| {
+                    PREFIX_SET.contains(word) || PREFIX_SET.iter().any(|p| word.starts_with(p))
+                })
+            });
         if has_dangerous_prefix {
             return false;
         }
@@ -117,5 +136,61 @@ impl Prefilter for PrefixPrefilter {
             return false;
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod chained_bypass_tests {
+    use super::*;
+
+    /// A dangerous verb after a safe first command must still reach the DFA.
+    ///
+    /// Before 2026-07-27 the prefilter took the first 3 words of the WHOLE
+    /// command, so a destructive verb chained after `cd` was fast-rejected — it
+    /// sat at word 4 and the DFA never ran, which made every rule in every
+    /// suite unreachable for that shape. Verified live at the time: the bare
+    /// form exited 1, the `cd`-prefixed form exited 0.
+    #[test]
+    fn a_dangerous_verb_after_a_safe_prefix_is_not_fast_rejected() {
+        let p = PrefixPrefilter;
+        for cmd in [
+            "cd /tmp && rm -rf /",
+            "cd a && cd b && rm -rf /",
+            "git status && kubectl delete namespace prod",
+            "cd repo && sed -i.bak 's/a/b/' Cargo.toml",
+            "mkdir -p x; cd x; helm uninstall app -n production",
+        ] {
+            assert!(!p.is_safe(cmd), "must reach the DFA: {cmd}");
+        }
+    }
+
+    /// The fix must not turn every chained command into a DFA call — the
+    /// prefilter exists so the ~99% safe majority costs ~50ns.
+    #[test]
+    fn genuinely_safe_chains_are_still_fast_rejected() {
+        let p = PrefixPrefilter;
+        // NOTE: `cargo` and `echo` are themselves in DANGEROUS_PREFIXES (the
+        // supply-chain and secrets categories), so neither is a valid "safe"
+        // fixture — a first draft used both and failed, which was the fixture
+        // being wrong rather than the prefilter.
+        for cmd in [
+            "cd /tmp && ls",
+            "cd src && cat main.rs",
+            "mkdir build && cd build",
+            "ls -la && pwd",
+        ] {
+            assert!(p.is_safe(cmd), "should stay on the fast path: {cmd}");
+        }
+    }
+
+    /// The scan stays bounded per segment; it did not silently become an
+    /// unbounded whole-command scan.
+    #[test]
+    fn the_scan_is_still_bounded_within_a_segment() {
+        let p = PrefixPrefilter;
+        // `rmdir` prefix-matches `rm`, but sits at word 6 of its segment — past
+        // the 3-word window. (`echo` cannot lead this fixture: it is itself a
+        // dangerous prefix.)
+        assert!(p.is_safe("ls one two three four rmdir"));
     }
 }

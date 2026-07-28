@@ -743,3 +743,63 @@ mod tests {
         assert_eq!(cmd, "shutdown --id test-123");
     }
 }
+
+#[cfg(test)]
+mod pleme_doctrine_tests {
+    use super::*;
+    use crate::model::{Rule, Severity};
+
+    fn doctrine() -> Vec<Rule> {
+        serde_yaml::from_str(include_str!("../rules/pleme-doctrine.yaml"))
+            .expect("pleme-doctrine.yaml must parse")
+    }
+
+    /// The two `sed-inplace-*` rules are BLOCK by operator override, not warn.
+    ///
+    /// Pinned because severity is the whole point of the rule: a stream editor
+    /// reports success based on whether it RAN, never on whether what it wrote
+    /// is valid, so its failure mode is indistinguishable from success. A
+    /// silent downgrade to `warn` in some future edit would leave the rule
+    /// present and looking correct while permitting the thing it names.
+    #[test]
+    fn sed_inplace_rules_are_block_not_warn() {
+        let rules = doctrine();
+        for name in ["sed-inplace-structured-file", "sed-inplace-structured-file-chained"] {
+            let r = rules.iter().find(|r| r.name == name)
+                .unwrap_or_else(|| panic!("rule '{name}' is missing"));
+            assert_eq!(r.severity, Severity::Block, "rule '{name}' must be Block");
+        }
+    }
+
+    /// A blocking rule that fires on prose ABOUT the rule trains the operator to
+    /// bypass the gate, and takes the true findings down with it.
+    #[test]
+    fn sed_rules_do_not_fire_on_prose_describing_them() {
+        let engine = RegexEngine::new(doctrine()).expect("compiles");
+        for prose in [
+            "echo 'the rule is: never use sed -i on a .nix file'",
+            "grep -n 'sed -i' docs/deshellify.md",
+            "sed -n '1,20p' README.md",
+        ] {
+            assert!(
+                matches!(engine.check(prose), Decision::Allow),
+                "must not fire on: {prose}"
+            );
+        }
+    }
+
+    #[test]
+    fn sed_rules_do_fire_on_the_real_thing() {
+        let engine = RegexEngine::new(doctrine()).expect("compiles");
+        for cmd in [
+            "sed -i 's/foo/bar/' flake.nix",
+            "cd repo && sed -i.bak 's/a/b/' Cargo.toml",
+            "perl -i -pe 's/x/y/' values.yaml",
+        ] {
+            assert!(
+                !matches!(engine.check(cmd), Decision::Allow),
+                "must fire on: {cmd}"
+            );
+        }
+    }
+}

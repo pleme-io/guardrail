@@ -1,10 +1,22 @@
 # pleme-io doctrine rules — absolutes from the org CLAUDE.md that are
 # expressible as a Bash-command pattern.
 #
-# WHY THESE ARE `warn` AND NOT `block`: shadow-first, the same discipline
-# breathe applies to its own actuators. A new gate is observed before it is
-# given teeth. Promote a rule to `block` once it has fired on real traffic and
-# the firings were all true positives — not before.
+# SEVERITY, and why it is not uniform:
+#
+# The two `sed-inplace-*` rules are `block` by OPERATOR OVERRIDE (2026-07-27,
+# "this sed stuff is just a no"). That outranks the shadow-first default — it is
+# L0 on the precedence ladder — and the evidence already existed: a stream editor
+# mutating a structured file reports success based on whether it RAN, never on
+# whether what it wrote is valid, so its failure mode is indistinguishable from
+# its success. A tool with that property cannot be used to verify anything, which
+# is why /deshellify treats it as a hard no rather than a preference.
+#
+# The remaining three stay `warn`: shadow-first, the discipline breathe applies
+# to its own actuators. `terraform apply` and `docker build` both have narrow
+# legitimate uses here (the documented akeylesslabs Terragrunt estate;
+# pre-bootstrap), so blocking them on day one would train the operator to bypass
+# the gate — which costs more than the rule earns. Promote on evidence: once a
+# rule has fired on real traffic and every firing was a true positive.
 #
 # EVERY RULE CARRIES A `test_allow` THAT IS PROSE DESCRIBING THE BANNED THING.
 # A detector that matches the documentation OF its own rule is a real failure
@@ -19,7 +31,7 @@
 
 - name: sed-inplace-structured-file
   pattern: '(^|[;&|]\s*)(sed|perl)\s+(-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b[^;&|]*\.(nix|ya?ml|toml|rs|json)\b'
-  severity: warn
+  severity: block
   message: "In-place stream edit of a structured file — sed/perl cannot see the grammar and can leave a file that still parses but means something else. Use a typed edit (Edit/Write, or the language's own AST tooling)."
   category: filesystem
   test_block: "sed -i 's/foo/bar/' flake.nix"
@@ -27,7 +39,7 @@
 
 - name: sed-inplace-structured-file-chained
   pattern: '[;&|]\s*(sed|perl)\s+(-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b[^;&|]*\.(nix|ya?ml|toml|rs|json)\b'
-  severity: warn
+  severity: block
   message: "In-place stream edit of a structured file, chained after another command — same grammar-blindness risk. Use a typed edit."
   category: filesystem
   test_block: "cd repo && sed -i.bak 's/a/b/' Cargo.toml"
