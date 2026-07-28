@@ -226,7 +226,7 @@
 
 # ── Terraform / IaC ───────────────────────────────────────────
 - name: terraform-destroy
-  pattern: 'terraform\s+destroy'
+  pattern: 'terraform\s+destroy\b'
   severity: block
   message: "terraform destroy tears down all managed infrastructure"
   category: terraform
@@ -266,7 +266,7 @@
   test_allow: "terraform plan"
 
 - name: pulumi-destroy
-  pattern: 'pulumi\s+destroy'
+  pattern: 'pulumi\s+destroy\b'
   severity: block
   message: "pulumi destroy tears down all managed infrastructure"
   category: terraform
@@ -304,7 +304,7 @@
 
 # ── FluxCD / GitOps ───────────────────────────────────────────
 - name: flux-uninstall
-  pattern: 'flux\s+uninstall'
+  pattern: 'flux\s+uninstall\b'
   severity: block
   message: "flux uninstall removes the entire GitOps controller"
   category: flux
@@ -487,7 +487,7 @@
 
 # ── Supply Chain ─────────────────────────────────────────────
 - name: npm-publish
-  pattern: 'npm\s+publish'
+  pattern: 'npm\s+publish\b'
   severity: block
   message: "npm publish — publishing to registry"
   category: secrets
@@ -495,7 +495,7 @@
   test_allow: "npm install"
 
 - name: cargo-publish
-  pattern: 'cargo\s+publish'
+  pattern: 'cargo\s+publish\b'
   severity: block
   message: "cargo publish — publishing to crates.io"
   category: secrets
