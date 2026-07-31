@@ -91,6 +91,25 @@
   test_block: "git branch -D old-branch"
   test_allow: "git branch -d merged"
 
+# vau (theory/VAU.md §II.2): PullOp = FastForward | RebaseOrAbort — there is
+# NO Merge variant. A bare `git pull` defaults to MERGE, which can leave a
+# conflicted working tree; that tree then either gets committed with markers
+# (bug 7ac40036) or abandoned, wedging the repo for every compliant reconciler.
+# Both have now happened. `tend` obeys the discipline in code (src/git.rs:162-194);
+# nothing constrained the AGENT path until this rule.
+#
+# Lookahead-free by necessity (regex crate has no `(?!...)`): match `git pull`
+# followed ONLY by positional args or short flags. Any long flag breaks the
+# group so the `$` anchor fails — which is how `--ff-only` / `--rebase` pass.
+# Known gap, stated honestly: `git -c pull.rebase=false pull` is not caught.
+- name: git-pull-bare-merge
+  pattern: 'git\s+pull(\s+(-[a-zA-Z]+|[a-zA-Z0-9._/][\w./-]*))*\s*$'
+  severity: block
+  message: "bare `git pull` defaults to merge and can leave a conflicted tree — use `git pull --ff-only` (or `--rebase --autostash`) per theory/VAU.md §II.2"
+  category: git
+  test_block: "git pull origin main"
+  test_allow: "git pull --ff-only origin main"
+
 # ── Database (core — see rules.d/sql.yaml for comprehensive coverage) ─
 - name: sql-drop-table
   pattern: '(?i)\bDROP\s+TABLE\b'
