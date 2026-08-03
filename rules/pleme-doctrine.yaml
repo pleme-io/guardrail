@@ -125,3 +125,28 @@
 # src/engine/prefilter.rs, i.e. paying a hot-path entry for a non-destructive
 # productivity footgun. Not obviously worth it; recorded so the next person
 # inherits the finding instead of re-deriving it.
+
+# ── Whole-tree staging with concurrent agents ───────────────────────
+# `git add -A` / `git add .` / `git commit -a` stage EVERYTHING in the worktree,
+# including files a DIFFERENT agent session staged seconds earlier. Multiple
+# `claude --dangerously-skip-permissions` sessions routinely share one working
+# directory, so this is not hypothetical.
+#
+# Measured 2026-08-02 in pleme-io/nix: eleven commits landed in ~28 hours with
+# the subject `init`, several containing another session's in-progress files —
+# one swept up a half-written module and pushed it. The commit-subject guard
+# (blackmatter.components.gitconfig.hooks.rejectSubjects) fixes the meaningless
+# MESSAGE; this addresses the actual mechanism, which is the whole-tree stage.
+#
+# `warn`, not block: `git add -A` is completely legitimate in a repo only you are
+# touching, and blocking it outright would train the operator to bypass the gate.
+# The remedy is `git add <path> …` — name what you changed, which is also what
+# makes a commit reviewable.
+
+- name: git-add-all-sweeps-concurrent-work
+  pattern: '(^|[;&|]\s*)git\s+(add\s+(-A|--all|\.)|commit\s+(-[a-zA-Z]*a[a-zA-Z]*\b|--all))'
+  severity: warn
+  message: "Whole-tree staging (git add -A/./--all, git commit -a) sweeps in anything ANOTHER agent session staged in this shared worktree — measured: eleven `init` commits in one day, some carrying a second session's in-progress files. Stage explicit paths: `git add <path> …`."
+  category: git
+  test_block: "git add -A"
+  test_allow: "echo 'git add -A can sweep another agents staged files in a shared worktree'"
