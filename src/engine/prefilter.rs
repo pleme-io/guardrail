@@ -67,6 +67,24 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     "journalctl",
     // ssh (remote command execution)
     "ssh",
+    // pgrep — NOT destructive, and the only entry here that is not.
+    //
+    // It earns its place because `pgrep -f PATTERN` matches full command lines
+    // INCLUDING the shell running the loop, whose own argv contains PATTERN. So
+    // `until ! pgrep -f 'x'; do sleep; done` is true because of the waiter and
+    // hangs forever. Hit twice in one session (2026-08-02/03) — once wedging a
+    // rebuild wait, once falsely reporting a rebuild in flight.
+    //
+    // Without this entry the rule is unreachable: a command starting with
+    // `until`/`while` is fast-rejected before the DFA runs, so the regex never
+    // sees it. That is why `pgrep-f-self-matching-wait` was withdrawn on
+    // 2026-08-02 and is only viable now.
+    //
+    // Cost is real but small: `is_safe` does a `contains` plus a linear
+    // `starts_with` scan over this set for each of the first 3 words per
+    // segment, so one more entry is one more short comparison on the hot path —
+    // paid to make a footgun catchable rather than re-learnable.
+    "pgrep",
 ];
 
 static PREFIX_SET: LazyLock<HashSet<&'static str>> =

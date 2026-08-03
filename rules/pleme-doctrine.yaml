@@ -107,24 +107,19 @@
   test_block: "nix flake update 2>&1 | tail -60"
   test_allow: "echo 'never pipe a nix command through tail — the exit code becomes tail(1)s'"
 
-# ── Wait loops built on pgrep -f — NOT A RULE, and here is why ──────
+# ── Wait loops built on pgrep -f ────────────────────────────────────
 # `until ! pgrep -f PATTERN; do …; done` hangs forever: `pgrep -f` matches full
 # command lines INCLUDING the shell running the loop, whose own argv contains
-# PATTERN. Measured 2026-08-02 against a real rebuild wait.
+# PATTERN. The condition is true because of the WAITER, so it never clears.
 #
-# It is NOT expressible as a rule here today. `PrefixPrefilter::is_safe` scans
-# the first 3 words of each `;&|` segment against PREFIX_SET; for
-# `until ! pgrep …` those are until / ! / pgrep, and `pgrep` is not in the set,
-# so the command is fast-rejected and NEVER REACHES the regex — in production
-# exactly as in the test harness, which flagged it via
-# `all_suite_rules_engine_valid` (the wrapped-in-echo failure).
+# Hit twice in one session (2026-08-02/03): once wedging a rebuild wait, once
+# falsely reporting a rebuild in flight when `ps | grep` showed none.
 #
-# Adding a rule anyway would have shipped a guard that can never fire while
-# reading like a working one — the precise failure this file's header warns
-# about. Making it real means adding `pgrep` to PREFIX_SET in
-# src/engine/prefilter.rs, i.e. paying a hot-path entry for a non-destructive
-# productivity footgun. Not obviously worth it; recorded so the next person
-# inherits the finding instead of re-deriving it.
+# This rule was WITHDRAWN on 2026-08-02 because it could not fire:
+# `PrefixPrefilter::is_safe` fast-rejects a command whose first 3 words per
+# segment miss PREFIX_SET, and for `until ! pgrep …` those are until / ! / pgrep.
+# Adding `pgrep` to that set (src/engine/prefilter.rs) is what makes it
+# reachable, and the second occurrence is what justified the hot-path entry.
 
 # ── Whole-tree staging with concurrent agents ───────────────────────
 # `git add -A` / `git add .` / `git commit -a` stage EVERYTHING in the worktree,
@@ -150,3 +145,11 @@
   category: git
   test_block: "git add -A"
   test_allow: "echo 'git add -A can sweep another agents staged files in a shared worktree'"
+
+- name: pgrep-f-self-matching-wait
+  pattern: '(^|[;&|]\s*)(until|while)\s[^;]*pgrep\s+-f'
+  severity: warn
+  message: "A wait loop on `pgrep -f` matches the loop's OWN command line, so the condition never clears and it hangs forever. Match the process another way (`pgrep -x`, the parent `sudo` line, a pidfile), or build the pattern from parts so it is absent from your own argv."
+  category: process
+  test_block: "until ! pgrep -f 'darwin-rebuild switch'; do sleep 10; done"
+  test_allow: "echo 'a pgrep -f wait loop can match its own command line and hang'"

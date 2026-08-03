@@ -89,7 +89,7 @@ mod tests {
     fn cache_miss_resolves_and_saves() {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(42);
-        let rules = resolve_cached(&cache, &fp, || Ok(test_rules())).unwrap();
+        let rules = resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
         assert_eq!(rules.len(), 1);
         // Cache should now be populated
         assert!(cache.load().is_some());
@@ -103,7 +103,7 @@ mod tests {
         // Populate cache
         cache.save(42, &test_rules()).unwrap();
         // Resolve should use cache (closure should NOT be called)
-        let rules = resolve_cached(&cache, &fp, || {
+        let rules = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, hayai::HayaiError> {
             panic!("should not be called on cache hit");
         }).unwrap();
         assert_eq!(rules.len(), 1);
@@ -114,7 +114,7 @@ mod tests {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(99); // different from cached
         cache.save(42, &vec![]).unwrap();
-        let rules = resolve_cached(&cache, &fp, || Ok(test_rules())).unwrap();
+        let rules = resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
         assert_eq!(rules.len(), 1);
         // Cache should be updated
         assert_eq!(cache.load().unwrap().0, 99);
@@ -293,11 +293,11 @@ mod tests {
         let cache = FsCache { path };
         let fp = FixedFingerprinter(777);
 
-        let rules = resolve_cached(&cache, &fp, || Ok(test_rules())).unwrap();
+        let rules = resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
         assert_eq!(rules.len(), 1);
 
         // Second call should hit cache
-        let rules2 = resolve_cached(&cache, &fp, || {
+        let rules2 = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, hayai::HayaiError> {
             panic!("should not be called on cache hit");
         }).unwrap();
         assert_eq!(rules2.len(), 1);
