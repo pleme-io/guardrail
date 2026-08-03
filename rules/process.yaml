@@ -25,12 +25,24 @@
   test_allow: "pkill -15 nginx"
 
 - name: shutdown
-  pattern: '\b(shutdown|poweroff|halt|reboot)\b'
+  # Anchored as a COMMAND, not as a word anywhere in the text.
+  #
+  # The bare `\b(...)\b` fired on prose: `is_safe` splits a command on newlines
+  # as well as `;&|`, so every LINE of a heredoc is its own segment, and a line
+  # reading "the halt floor 5.0%" puts `halt` in the first three words. Measured
+  # 2026-08-03: it blocked a git commit whose MESSAGE described a disk threshold,
+  # and blocked a `grep` searching for the rule itself. That is the failure this
+  # file's sibling suite warns about — a detector that matches the documentation
+  # OF the thing it guards trains the operator to bypass the gate.
+  #
+  # The optional prefix group is load-bearing: `sudo shutdown -r now` and
+  # `doas reboot` must still block, and they are not at segment start.
+  pattern: '(^|[;&|]\s*)(sudo\s+|doas\s+|env\s+)*(shutdown|poweroff|halt|reboot)\b'
   severity: block
   message: "System shutdown/reboot command"
   category: process
   test_block: "shutdown -h now"
-  test_allow: "uptime"
+  test_allow: "echo 'the halt floor is 5% — never reboot to fix a full disk'"
 
 - name: systemctl-stop-critical
   pattern: 'systemctl\s+stop\s+(sshd|networking|docker|k3s|kubelet)'
