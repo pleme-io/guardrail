@@ -83,3 +83,45 @@
   category: docker
   test_block: "docker build -t myimage ."
   test_allow: "docker images"
+
+# ── Exit-code masking on long-running nix commands ──────────────────
+# `nix … | tail -N` reports the PIPELINE's status, which is tail's, so a FAILED
+# nix command reads as exit 0. It also buffers, so the log stays empty until the
+# command ends — no progress on a multi-minute build.
+#
+# Measured 2026-08-02, twice in one session: `nix flake update 2>&1 | tail -60`
+# aborted on a bad input and was reported as "exit code 0", and
+# `nix run .#rebuild 2>&1 | tail -30` produced an empty log for the whole build.
+# The nix repo's own maintenance-juggling doc already warns that "| tail hides
+# progress"; this makes it catchable instead of re-learnable.
+#
+# `warn`, per this file's shadow-first default: it is a correctness-of-reporting
+# problem, not a destructive one, and `nix search … | head` is legitimate.
+# Promote to block once every firing has been a true positive.
+
+- name: nix-piped-exit-code-masked
+  pattern: '(^|[;&|]\s*)(nix|nixos-rebuild|darwin-rebuild)\s[^|]*\|\s*(tail|head)\b'
+  severity: warn
+  message: "Piping nix/rebuild through tail|head masks the exit code (you get tail's, always 0) and buffers all output so progress is invisible. Redirect and check explicitly: `nix flake update > /tmp/out.log 2>&1; echo exit=$?`."
+  category: nix
+  test_block: "nix flake update 2>&1 | tail -60"
+  test_allow: "echo 'never pipe a nix command through tail — the exit code becomes tail(1)s'"
+
+# ── Wait loops built on pgrep -f — NOT A RULE, and here is why ──────
+# `until ! pgrep -f PATTERN; do …; done` hangs forever: `pgrep -f` matches full
+# command lines INCLUDING the shell running the loop, whose own argv contains
+# PATTERN. Measured 2026-08-02 against a real rebuild wait.
+#
+# It is NOT expressible as a rule here today. `PrefixPrefilter::is_safe` scans
+# the first 3 words of each `;&|` segment against PREFIX_SET; for
+# `until ! pgrep …` those are until / ! / pgrep, and `pgrep` is not in the set,
+# so the command is fast-rejected and NEVER REACHES the regex — in production
+# exactly as in the test harness, which flagged it via
+# `all_suite_rules_engine_valid` (the wrapped-in-echo failure).
+#
+# Adding a rule anyway would have shipped a guard that can never fire while
+# reading like a working one — the precise failure this file's header warns
+# about. Making it real means adding `pgrep` to PREFIX_SET in
+# src/engine/prefilter.rs, i.e. paying a hot-path entry for a non-destructive
+# productivity footgun. Not obviously worth it; recorded so the next person
+# inherits the finding instead of re-deriving it.
