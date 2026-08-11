@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "a21d6bc4a0c2232981425bfc4044874976942abec236719c91c1d0ce08df271b",
+  "cargo_lock_sha256": "151c9f1a6d82fd42bd50a05c5a0283942ccba3308b0919c9dd43b9808e645c4f",
   "manifest_sha256": {
-    "Cargo.toml": "0267b7531ed8c3cbc2f8852e2d0bb3a827ca45673b2e53ecde72cfd0ff404e1c"
+    "Cargo.toml": "f0f8809bcdbc69917828413b9077ce1b45afee96a25b5fe8b17172d651c1afdc"
   },
   "target_resolves": {
     "base": {
-      "aho-corasick-1.1.4": {
+      "aho-corasick-1.1.5": {
         "runtime_dependencies": [
           {
             "name": "memchr",
@@ -149,7 +149,7 @@
           },
           {
             "name": "bstr",
-            "package_key": "bstr-1.13.0",
+            "package_key": "bstr-1.13.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -215,7 +215,7 @@
           "std"
         ]
       },
-      "bstr-1.13.0": {
+      "bstr-1.13.1": {
         "runtime_dependencies": [
           {
             "name": "memchr",
@@ -229,7 +229,7 @@
           },
           {
             "name": "regex_automata",
-            "package_key": "regex-automata-0.4.16",
+            "package_key": "regex-automata-0.4.18",
             "kind": "normal",
             "features": [
               "dfa-search"
@@ -253,11 +253,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "clap-4.6.5": {
+      "clap-4.6.6": {
         "runtime_dependencies": [
           {
             "name": "clap_builder",
-            "package_key": "clap_builder-4.6.5",
+            "package_key": "clap_builder-4.6.6",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -288,7 +288,7 @@
           "usage"
         ]
       },
-      "clap_builder-4.6.5": {
+      "clap_builder-4.6.6": {
         "runtime_dependencies": [
           {
             "name": "anstream",
@@ -574,7 +574,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.2": {
+      "guardrail-0.1.3": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -588,7 +588,7 @@
           },
           {
             "name": "clap",
-            "package_key": "clap-4.6.5",
+            "package_key": "clap-4.6.6",
             "kind": "normal",
             "features": [
               "derive"
@@ -695,7 +695,7 @@
           },
           {
             "name": "thiserror",
-            "package_key": "thiserror-2.0.19",
+            "package_key": "thiserror-2.0.20",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -945,7 +945,7 @@
         "runtime_dependencies": [
           {
             "name": "aho_corasick",
-            "package_key": "aho-corasick-1.1.4",
+            "package_key": "aho-corasick-1.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -965,7 +965,7 @@
           },
           {
             "name": "regex_automata",
-            "package_key": "regex-automata-0.4.16",
+            "package_key": "regex-automata-0.4.18",
             "kind": "normal",
             "features": [
               "alloc",
@@ -1010,11 +1010,11 @@
           "unicode-segment"
         ]
       },
-      "regex-automata-0.4.16": {
+      "regex-automata-0.4.18": {
         "runtime_dependencies": [
           {
             "name": "aho_corasick",
-            "package_key": "aho-corasick-1.1.4",
+            "package_key": "aho-corasick-1.1.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -1393,11 +1393,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "thiserror-2.0.19": {
+      "thiserror-2.0.20": {
         "runtime_dependencies": [
           {
             "name": "thiserror_impl",
-            "package_key": "thiserror-impl-2.0.19",
+            "package_key": "thiserror-impl-2.0.20",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1412,7 +1412,7 @@
           "std"
         ]
       },
-      "thiserror-impl-2.0.19": {
+      "thiserror-impl-2.0.20": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -2113,7 +2113,7 @@
     }
   },
   "per_crate": {
-    "aho-corasick-1.1.4": {
+    "aho-corasick-1.1.5": {
       "edition": "2021"
     },
     "anstream-1.0.0": {
@@ -2148,13 +2148,13 @@
     "bitflags-2.13.1": {
       "edition": "2021"
     },
-    "bstr-1.13.0": {
+    "bstr-1.13.1": {
       "edition": "2021"
     },
     "cfg-if-1.0.4": {
       "edition": "2018"
     },
-    "clap-4.6.5": {
+    "clap-4.6.6": {
       "edition": "2024",
       "binaries": [
         {
@@ -2163,7 +2163,7 @@
         }
       ]
     },
-    "clap_builder-4.6.5": {
+    "clap_builder-4.6.6": {
       "edition": "2024"
     },
     "clap_derive-4.6.4": {
@@ -2195,7 +2195,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.2": {
+    "guardrail-0.1.3": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2266,7 +2266,7 @@
     "regex-1.13.1": {
       "edition": "2021"
     },
-    "regex-automata-0.4.16": {
+    "regex-automata-0.4.18": {
       "edition": "2021"
     },
     "regex-syntax-0.8.11": {
@@ -2310,11 +2310,11 @@
     "termtree-0.5.1": {
       "edition": "2021"
     },
-    "thiserror-2.0.19": {
+    "thiserror-2.0.20": {
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "thiserror-impl-2.0.19": {
+    "thiserror-impl-2.0.20": {
       "edition": "2021",
       "proc_macro": true
     },
