@@ -24,26 +24,63 @@
 # hits of which 4 were doc-comments stating there is no `format!()`. A rule
 # that fires on "never use sed -i" trains the operator to bypass the gate.
 
-# ── Structured-file mutation ────────────────────────────────────────
-# The org rule: never use a stream editor to mutate a structured file (Nix,
-# YAML, TOML, Rust, JSON). It cannot see the grammar, so it silently produces
-# a file that still parses but means something else. Use a typed edit instead.
+# ── In-place file mutation by a stream editor ───────────────────────
+# The org rule: never use a stream editor to mutate a file that stays. It
+# cannot see the grammar, so it silently produces a file that still parses but
+# means something else. Use a typed edit instead.
+#
+# BROADENED 2026-08-11 FROM A STRUCTURED-FILE EXTENSION LIST TO EVERY PATH, by
+# operator instruction ("automatically /deshellify any sed ever anywhere you
+# ever find"). Two rules used to require the path to end in
+# `.nix|.ya?ml|.toml|.rs|.json`, which made the guard a function of the
+# FILENAME rather than of the operation — and the operation is what is unsafe.
+# The extension list missed, among others, `go.mod`, `Dockerfile`, `.envrc`,
+# `Makefile`, a shell rc, and any path built from a variable (`$f`, `$out/x`),
+# which is the shape a derivation phase actually writes. Receipt the same day:
+# substrate's `goDirectiveNormalization` shipped a
+# `sed -i -E 's|^go 1.N$|go 1.N.0|' go.mod` inside a Nix build phase — no
+# extension in the list, so no rule could ever have fired, and the defect was
+# the canonical one (a directive with a trailing comment does not match, sed
+# exits 0, the phase reports success while normalizing nothing).
+#
+# The chained variant was folded in rather than kept: `(^|[;&|]\s*)` already
+# anchors to the start of ANY segment, so the second rule was matching a strict
+# subset of the first and only doubled the message.
 
-- name: sed-inplace-structured-file
-  pattern: '(^|[;&|]\s*)(sed|perl)\s+(-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b[^;&|]*\.(nix|ya?ml|toml|rs|json)\b'
+- name: sed-inplace-any-file
+  pattern: '(^|[;&|]\s*)(sed|perl|awk)\s+[^;&|]*(-[a-zA-Z]*i[a-zA-Z]*\b|--in-place)'
   severity: block
-  message: "In-place stream edit of a structured file — sed/perl cannot see the grammar and can leave a file that still parses but means something else. Use a typed edit (Edit/Write, or the language's own AST tooling)."
+  message: "In-place stream edit — a stream editor reports success based on whether it RAN, never on whether its pattern matched or what it wrote is valid, so its failure mode is identical to its success. Use a typed edit (Edit/Write), or compute the file's bytes and install them. Read-only extraction (sed -n, awk '{print}') is unaffected."
   category: filesystem
   test_block: "sed -i 's/foo/bar/' flake.nix"
   test_allow: "echo 'the rule is: never use sed -i on a .nix file'"
 
-- name: sed-inplace-structured-file-chained
-  pattern: '[;&|]\s*(sed|perl)\s+(-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b[^;&|]*\.(nix|ya?ml|toml|rs|json)\b'
-  severity: block
-  message: "In-place stream edit of a structured file, chained after another command — same grammar-blindness risk. Use a typed edit."
+# ── Scratch interpreter as an editing tool ──────────────────────────
+# The sibling shape of the rule above, and the one that survives it: blocked
+# from `sed -i`, the reflex is a throwaway `python3 - <<'PY'` that opens the
+# same file and rewrites it. Same properties — real logic, no review, no tests,
+# gone before anyone reads it — and it defeats the rule above rather than
+# obeying it.
+#
+# Receipt, 2026-08-11, in the session that broadened these rules: a
+# `python3 - <<EOF` heredoc mutated mado's `src/browser_engine.rs` to migrate
+# four call sites. It happened to be correct, and nothing would have said so if
+# it had not been; the typed `Edit` for the same change fails loudly on a
+# missed or ambiguous match, which is the property the heredoc gives up.
+#
+# `warn`, not block, and deliberately: a one-line `python3 -c` that READS
+# (parses JSON, tallies a listing) is legitimate and frequent, so blocking the
+# interpreter outright would train the operator to bypass the gate — the same
+# reasoning this file applies to `terraform apply`. The pattern therefore
+# requires either a heredoc body or a write-shaped call, not the bare `-c`.
+
+- name: scratch-interpreter-file-mutation
+  pattern: "(^|[;&|]\\s*)(python[0-9.]*|ruby|node)\\s+(-\\s*<<|-c\\b[^;]*\\b(open|write|File\\.|writeFileSync)\\b)"
+  severity: warn
+  message: "A scratch interpreter used as an editing tool — same shape as sed -i, one language further out: real logic with no review, no tests, and a silent no-op when its assumption is wrong. Use Edit/Write for a file that stays, or a /tmp/<name>.tlisp run through tatara-script for ad-hoc logic worth keeping."
   category: filesystem
-  test_block: "cd repo && sed -i.bak 's/a/b/' Cargo.toml"
-  test_allow: "cd repo && cat Cargo.toml"
+  test_block: "python3 - <<'PY'"
+  test_allow: "python3 -c 'import json,sys; print(json.load(sys.stdin)[\"rev\"])'"
 
 # ── Hand-run infrastructure execution ───────────────────────────────
 # PLATFORM-MEDIATED INFRASTRUCTURE: the operator (pangea-operator) is the sole

@@ -33,10 +33,21 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     "terraform", "tofu", "pulumi", "ansible-playbook",
     // stream editors
     //
-    // In-place edits (`sed -i`, `perl -i`) of structured files are the class
+    // In-place edits (`sed -i`, `perl -i`) of a file that stays are the class
     // this covers: the editor cannot see the file's grammar, so it can leave
     // something that still parses but means something else.
     "sed", "perl", "awk",
+    // scratch interpreters used as editing tools
+    //
+    // The sibling shape of the stream editors above, and where the reflex goes
+    // once `sed -i` is blocked: a throwaway heredoc that opens the same file
+    // and rewrites it. `python` was already present (for django/rails-adjacent
+    // reasons); `ruby` and `node` were NOT, so `scratch-interpreter-file-
+    // mutation` fast-rejected before the DFA ran and could not fire on them at
+    // all — the same unreachability recorded above for `tofu`. Caught by that
+    // rule's own test, which is the argument for pairing every new rule with a
+    // must-fire case rather than eyeballing the pattern.
+    "ruby", "node",
     // akeyless
     "akeyless", "aky",
     // process

@@ -754,17 +754,24 @@ mod pleme_doctrine_tests {
             .expect("pleme-doctrine.yaml must parse")
     }
 
-    /// The two `sed-inplace-*` rules are BLOCK by operator override, not warn.
+    /// `sed-inplace-any-file` is BLOCK by operator override, not warn.
     ///
     /// Pinned because severity is the whole point of the rule: a stream editor
     /// reports success based on whether it RAN, never on whether what it wrote
     /// is valid, so its failure mode is indistinguishable from success. A
     /// silent downgrade to `warn` in some future edit would leave the rule
     /// present and looking correct while permitting the thing it names.
+    ///
+    /// The name is load-bearing here, not incidental: this list used to hold
+    /// `sed-inplace-structured-file{,-chained}`, whose guard was a function of
+    /// the FILENAME. Broadening to every path (2026-08-11) renamed the rule,
+    /// and a rename that did not reach this list would `panic!("missing")` —
+    /// which is the intended behaviour, since a severity pin naming a rule
+    /// nobody defines is a guard over zero subjects.
     #[test]
     fn sed_inplace_rules_are_block_not_warn() {
         let rules = doctrine();
-        for name in ["sed-inplace-structured-file", "sed-inplace-structured-file-chained"] {
+        for name in ["sed-inplace-any-file"] {
             let r = rules.iter().find(|r| r.name == name)
                 .unwrap_or_else(|| panic!("rule '{name}' is missing"));
             assert_eq!(r.severity, Severity::Block, "rule '{name}' must be Block");
@@ -795,10 +802,44 @@ mod pleme_doctrine_tests {
             "sed -i 's/foo/bar/' flake.nix",
             "cd repo && sed -i.bak 's/a/b/' Cargo.toml",
             "perl -i -pe 's/x/y/' values.yaml",
+            // The paths the old extension list could not see. Each is a real
+            // shape: substrate's goDirectiveNormalization wrote the first one
+            // inside a Nix build phase, and a derivation phase names its target
+            // through a variable far more often than through a literal.
+            "sed -i -E 's|^go 1.25$|go 1.25.0|' go.mod",
+            "sed -i 's/a/b/' \"$out/etc/config\"",
+            "sed -i '' 's/x/y/' Dockerfile",
         ] {
             assert!(
                 !matches!(engine.check(cmd), Decision::Allow),
                 "must fire on: {cmd}"
+            );
+        }
+    }
+
+    /// The scratch-interpreter rule is the sibling shape: blocked from
+    /// `sed -i`, the reflex is a heredoc that rewrites the same file. It must
+    /// fire on a mutation and stay quiet on a read, or it costs more than it
+    /// earns — see the rule's own comment for why it is `warn`.
+    #[test]
+    fn scratch_interpreter_rule_separates_mutation_from_reading() {
+        let engine = RegexEngine::new(doctrine()).expect("compiles");
+        for cmd in [
+            "python3 - <<'PY'",
+            "node -c \"require('fs').writeFileSync('a.json','{}')\"",
+        ] {
+            assert!(
+                !matches!(engine.check(cmd), Decision::Allow),
+                "must fire on: {cmd}"
+            );
+        }
+        for cmd in [
+            "python3 -c 'import json,sys; print(json.load(sys.stdin)[\"rev\"])'",
+            "echo 'a python3 heredoc that rewrites a file is the same shape as sed -i'",
+        ] {
+            assert!(
+                matches!(engine.check(cmd), Decision::Allow),
+                "must not fire on: {cmd}"
             );
         }
     }
