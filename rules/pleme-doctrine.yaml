@@ -48,12 +48,40 @@
 # subset of the first and only doubled the message.
 
 - name: sed-inplace-any-file
-  pattern: '(^|[;&|]\s*)(sed|perl|awk)\s+[^;&|]*(-[a-zA-Z]*i[a-zA-Z]*\b|--in-place)'
+  # THE FLAG MUST BE AN ARGUMENT — `\s-` is load-bearing, not tidiness.
+  #
+  # This alternation used to read `(-[a-zA-Z]*i[a-zA-Z]*\b|--in-place)` with no
+  # constraint on what preceded the hyphen, so it matched ANY hyphenated token
+  # containing an `i` anywhere in the rest of the command — including inside a
+  # PATH. In this fleet that is not an edge case, it is most paths:
+  # `pleme-io`, `pleme-lib`, `akeyless-images`, `blackmatter-nvim` all match.
+  #
+  # The result was a rule that blocked exactly what its own message promises is
+  # unaffected. Measured 2026-08-11, twice in one session, both READ-ONLY:
+  #   sed -n '287p' docs/pleme-io-CLAUDE.md          -> blocked on `-io`
+  #   sed -n '278,312p' charts/pleme-lib/.../x.tpl   -> blocked on `-lib`
+  # Neither mutates anything. A block that fires on inspection teaches agents
+  # to route around the rule rather than obey it, which costs more than the
+  # rule buys — and it cost this session two detours into other tooling.
+  #
+  # The fix is `([^;&|]*\s)?` — the flag must begin a TOKEN, either immediately
+  # after the command or after whitespace. It cannot weaken the real block: an
+  # in-place flag is always its own argv token, so `sed -i`, `sed --in-place`,
+  # `perl -pi -e` and `awk -i inplace` all still match. What stops matching is a
+  # hyphen INSIDE a word, which is never a flag.
+  #
+  # A first attempt at this fix used a bare `\s-` and BROKE THE BLOCK, because
+  # `\s+` above already consumes the separator, so `\s-` demanded a second
+  # space and `sed -i 's/x/y/' f` stopped matching. Caught by
+  # `sed_rules_do_fire_on_the_real_thing` — which is the argument for a rule
+  # carrying both a test_block and a test_allow: loosening a pattern to kill a
+  # false positive is exactly the edit that silently disarms it.
+  pattern: '(^|[;&|]\s*)(sed|perl|awk)\s+([^;&|]*\s)?(-[a-zA-Z]*i[a-zA-Z]*\b|--in-place)'
   severity: block
   message: "In-place stream edit — a stream editor reports success based on whether it RAN, never on whether its pattern matched or what it wrote is valid, so its failure mode is identical to its success. Use a typed edit (Edit/Write), or compute the file's bytes and install them. Read-only extraction (sed -n, awk '{print}') is unaffected."
   category: filesystem
   test_block: "sed -i 's/foo/bar/' flake.nix"
-  test_allow: "echo 'the rule is: never use sed -i on a .nix file'"
+  test_allow: "sed -n '278,312p' charts/pleme-lib/templates/_jetstream_stream.tpl"
 
 # ── Scratch interpreter as an editing tool ──────────────────────────
 # The sibling shape of the rule above, and the one that survives it: blocked
