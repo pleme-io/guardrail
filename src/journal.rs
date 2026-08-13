@@ -154,19 +154,38 @@ fn has_script_extension(word: &str) -> bool {
 }
 
 /// Default journal file path.
+///
+/// Every arm yields an ABSOLUTE path or defers to the next one. The first two
+/// used to take their variable verbatim and only the literal third arm was
+/// safe — the shape catalogued in `theory/MASKED-BRANCH.md`, where a guarded
+/// arm makes the chain read as safe while the arm an operator actually sets is
+/// raw. `XDG_RUNTIME_DIR=""` put the journal at the relative
+/// `guardrail/write-journal.json`, i.e. inside whatever directory the guarded
+/// process happened to run in.
+///
+/// That matters more for this file than for most: it is the write-guard's own
+/// journal. A cwd-relative journal means each invocation from a different
+/// directory reads and writes a DIFFERENT history, so the guard silently loses
+/// the record it exists to keep — and it fails in the direction of permitting,
+/// since an empty journal looks like a clean one.
 fn default_journal_path() -> PathBuf {
-    if let Ok(runtime) = env::var("XDG_RUNTIME_DIR") {
-        PathBuf::from(runtime)
-            .join("guardrail")
-            .join("write-journal.json")
-    } else if let Ok(tmpdir) = env::var("TMPDIR") {
-        // macOS sets $TMPDIR to a per-user temp directory
-        PathBuf::from(tmpdir).join("guardrail-journal.json")
-    } else {
-        // Last resort: use user name for isolation
-        let user = env::var("USER").unwrap_or_else(|_| "unknown".into());
-        PathBuf::from(format!("/tmp/guardrail-journal-{user}.json"))
+    // okiba applies the spec rule to $XDG_RUNTIME_DIR: a relative or empty
+    // override is ignored rather than joined. Same path for every valid value.
+    if let Ok(runtime) = okiba::Okiba::for_app("guardrail").base(okiba::Tier::Runtime) {
+        return runtime.join("guardrail").join("write-journal.json");
     }
+    // macOS sets $TMPDIR to a per-user temp directory. Absolute-only, for the
+    // same reason — okiba does not model TMPDIR, so this arm carries its own
+    // check rather than a different resolution.
+    if let Some(tmpdir) = env::var_os("TMPDIR")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+    {
+        return tmpdir.join("guardrail-journal.json");
+    }
+    // Last resort: use user name for isolation. Absolute by construction.
+    let user = env::var("USER").unwrap_or_else(|_| "unknown".into());
+    PathBuf::from(format!("/tmp/guardrail-journal-{user}.json"))
 }
 
 fn now_secs() -> u64 {

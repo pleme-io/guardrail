@@ -10,6 +10,11 @@ description = "Defensive guardrails for AI coding agents — block destructive c
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 hayai = "0.1"
+# okiba (置き場) — XDG resolution where a RELATIVE or empty override is IGNORED
+# per spec rather than joined. default_journal_path took $XDG_RUNTIME_DIR
+# verbatim, so an empty one put the write-guard's OWN journal in the cwd —
+# a different history per directory, failing toward permitting.
+okiba = "0.2"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
