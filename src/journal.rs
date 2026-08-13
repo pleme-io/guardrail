@@ -168,7 +168,7 @@ fn has_script_extension(word: &str) -> bool {
 /// directory reads and writes a DIFFERENT history, so the guard silently loses
 /// the record it exists to keep — and it fails in the direction of permitting,
 /// since an empty journal looks like a clean one.
-fn default_journal_path() -> PathBuf {
+fn default_journal_path() -> okiba::AbsPath {
     // okiba applies the spec rule to $XDG_RUNTIME_DIR: a relative or empty
     // override is ignored rather than joined. Same path for every valid value.
     if let Ok(runtime) = okiba::Okiba::for_app("guardrail").base(okiba::Tier::Runtime) {
@@ -177,15 +177,19 @@ fn default_journal_path() -> PathBuf {
     // macOS sets $TMPDIR to a per-user temp directory. Absolute-only, for the
     // same reason — okiba does not model TMPDIR, so this arm carries its own
     // check rather than a different resolution.
+    // Every arm yields an AbsPath, so the guarantee reaches the sink instead of
+    // decaying to a bare PathBuf at the return — the whole point of okiba 0.3.
     if let Some(tmpdir) = env::var_os("TMPDIR")
         .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
+        .and_then(|p| okiba::AbsPath::new(p).ok())
     {
         return tmpdir.join("guardrail-journal.json");
     }
-    // Last resort: use user name for isolation. Absolute by construction.
+    // Last resort: use user name for isolation. Absolute by construction, and
+    // the constructor is what says so rather than a comment.
     let user = env::var("USER").unwrap_or_else(|_| "unknown".into());
-    PathBuf::from(format!("/tmp/guardrail-journal-{user}.json"))
+    okiba::AbsPath::new(format!("/tmp/guardrail-journal-{user}.json"))
+        .expect("a /tmp-rooted path is absolute")
 }
 
 fn now_secs() -> u64 {
