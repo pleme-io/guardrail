@@ -19,10 +19,46 @@ use serde::{Deserialize, Serialize};
 const ENTRY_TTL_SECS: u64 = 300;
 
 /// Script extensions recognized by `extract_executed_paths`.
-const SCRIPT_EXTENSIONS: &[&str] = &[".sh", ".bash", ".py", ".rb", ".pl", ".zsh"];
+///
+/// **This list is a security boundary, so enumerate it deliberately rather
+/// than by listing the languages that came to mind** — the same lesson the
+/// fleet's own `pre-commit` hook records about its `--diff-filter` list, where
+/// omitting `R` left a live bypass (rename-plus-add-a-credential) open for
+/// months. Every extension absent here is a chaining bypass: guardrail
+/// downgrades dangerous *content* to a warning on Write/Edit precisely because
+/// the journal is expected to catch the later execution, so a language the
+/// journal cannot see is one where the Write warning is the *only* signal.
+///
+/// **`.tlisp` and `tatara-script` were added 2026-08-18, and their absence was
+/// the sharpest hole in the list: tatara-lisp is the fleet's OWN canonical
+/// bash replacement** (the NO SHELL law routes every non-trivial script
+/// through it, and the global git hooks are themselves `.tlisp`), so the one
+/// scripting language guardrail is most likely to see an agent write was the
+/// one language it could not recognise being run. `blue` (`.b`) is the fleet's
+/// other first-party language; the JS trio is here because agents genuinely
+/// write and run JS in this fleet (guardrail itself ships an opencode plugin
+/// that is a `.js` file).
+const SCRIPT_EXTENSIONS: &[&str] = &[
+    ".sh", ".bash", ".py", ".rb", ".pl", ".zsh",
+    // pleme-io first-party languages
+    ".tlisp", ".b",
+    // JS/TS — an agent-written runner is as executable as a shell script
+    ".js", ".mjs", ".cjs", ".ts",
+];
 
 /// Shell command prefixes that take a script path as the next non-flag argument.
-const SHELL_INTERPRETERS: &[&str] = &["bash", "sh", "zsh", "python", "python3", "ruby", "perl"];
+///
+/// Same boundary discipline as `SCRIPT_EXTENSIONS` above, and the same
+/// 2026-08-18 addition: `tatara-script` is how every `.tlisp` in this fleet is
+/// executed, so without it `tatara-script /tmp/written.tlisp` read as an
+/// ordinary command.
+const SHELL_INTERPRETERS: &[&str] = &[
+    "bash", "sh", "zsh", "python", "python3", "ruby", "perl",
+    // pleme-io first-party interpreters
+    "tatara-script", "blue",
+    // JS/TS runtimes
+    "node", "deno", "bun",
+];
 
 /// A journal entry recording a written file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,33 +148,99 @@ impl WriteJournal {
 
 /// Extract file paths that a Bash command might execute.
 ///
-/// Heuristic (single pass): for each word, check if it's a direct script path
-/// or if it follows a shell interpreter prefix.
+/// Two independent branches: a word that IS a script path, and the argument of
+/// an interpreter invoked in **command position**.
+///
+/// ── WHY COMMAND POSITION, and not "anywhere in the line" (fixed 2026-08-18)
+///
+/// The interpreter branch used to fire on an interpreter name appearing at ANY
+/// index, which made every command that merely *mentions* one a false match.
+/// Measured against the pre-fix code:
+///
+/// ```text
+/// "rg bash ."                 -> ["."]              // `.` is not a script
+/// "rg python3 /tmp/evil.py"   -> ["/tmp/evil.py"]   // a real false-block path
+/// "grep -rn sh src/"          -> ["src/"]
+/// ```
+///
+/// The middle one is the defect that matters: searching for the *string*
+/// `python3` in a command that also names a journaled-dangerous file yields a
+/// chain block on a command that executes nothing. Low probability, but it is a
+/// false BLOCK, and a guard that blocks work it should not is how the whole
+/// guard gets switched off.
+///
+/// This is the same class guardrail's own prefilter already fixed — and the
+/// same remedy: split on shell operators FIRST, then read only the head of each
+/// segment (`engine/prefilter.rs` splits on `; & | \n` for exactly this reason,
+/// where the bug was `cd /tmp && rm -rf /` fast-rejecting on `cd`). The
+/// direct-path branch is deliberately left position-free: a word that is both
+/// path-like and script-extensioned is worth journaling wherever it appears,
+/// and it cannot invent a path that was not written in the command.
 #[must_use]
 pub fn extract_executed_paths(command: &str) -> Vec<String> {
-    let words: Vec<&str> = command.split_whitespace().collect();
     let mut paths = Vec::new();
 
-    for (i, word) in words.iter().enumerate() {
-        let basename = Path::new(word)
+    // Branch 1 — direct script paths, any position.
+    for word in command.split_whitespace() {
+        if is_path_like(word) && has_script_extension(word) {
+            paths.push(word.to_owned());
+        }
+    }
+
+    // Branch 2 — an interpreter in command position takes the next non-flag word.
+    for segment in split_on_shell_operators(command) {
+        let words: Vec<&str> = segment.split_whitespace().collect();
+        let Some(head) = command_head(&words) else {
+            continue;
+        };
+        let basename = Path::new(words[head])
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or(word);
-
+            .unwrap_or(words[head]);
         if SHELL_INTERPRETERS.contains(&basename) {
-            if let Some(script) = words[i + 1..].iter().find(|w| !w.starts_with('-')) {
+            if let Some(script) = words[head + 1..].iter().find(|w| !w.starts_with('-')) {
                 paths.push((*script).to_owned());
             }
-        }
-
-        if is_path_like(word) && has_script_extension(word) {
-            paths.push((*word).to_owned());
         }
     }
 
     paths.sort();
     paths.dedup();
     paths
+}
+
+/// Split a command line into segments at shell operators, so each segment's
+/// first word is a command position. Mirrors `engine/prefilter.rs`'s split set.
+fn split_on_shell_operators(command: &str) -> impl Iterator<Item = &str> {
+    command
+        .split(|c| matches!(c, ';' | '&' | '|' | '\n' | '(' | ')'))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
+/// Index of the word actually being executed in a segment: skips leading
+/// `VAR=value` assignments and the transparent wrappers that take a command as
+/// their argument, so `env FOO=1 sudo bash x.sh` still resolves to `bash`.
+fn command_head(words: &[&str]) -> Option<usize> {
+    /// Wrappers whose own argument is the real command.
+    const WRAPPERS: &[&str] = &["env", "sudo", "doas", "nohup", "time", "exec", "command", "nice"];
+
+    let mut i = 0;
+    while i < words.len() {
+        let w = words[i];
+        // A leading assignment (`FOO=1`) is not the command.
+        let is_assignment = !w.starts_with('=')
+            && w.split_once('=').is_some_and(|(k, _)| {
+                !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            });
+        let basename = Path::new(w).file_name().and_then(|n| n.to_str()).unwrap_or(w);
+        if is_assignment || WRAPPERS.contains(&basename) || w.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return Some(i);
+    }
+    None
 }
 
 /// Whether a word looks like a file path.
@@ -329,6 +431,107 @@ mod tests {
     fn extract_paths_no_scripts() {
         let paths = extract_executed_paths("ls -la /tmp");
         assert!(paths.is_empty());
+    }
+
+    // ── The fleet's own languages (added 2026-08-18) ──────────────
+    //
+    // These four pin the hole that mattered most: tatara-lisp is the fleet's
+    // canonical bash replacement, so `.tlisp` was the extension guardrail was
+    // most likely to meet and least able to see. Each asserts BOTH forms —
+    // via the interpreter and as a direct executable path — because
+    // `extract_executed_paths` has two independent branches and covering one
+    // proves nothing about the other.
+
+    #[test]
+    fn extract_paths_tlisp_via_tatara_script() {
+        let paths = extract_executed_paths("tatara-script /tmp/written.tlisp");
+        assert!(paths.contains(&"/tmp/written.tlisp".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_tlisp_direct() {
+        let paths = extract_executed_paths("/tmp/hook.tlisp --arg x");
+        assert!(paths.contains(&"/tmp/hook.tlisp".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_blue_both_forms() {
+        assert!(extract_executed_paths("blue /tmp/run.b")
+            .contains(&"/tmp/run.b".to_owned()));
+        assert!(extract_executed_paths("./run.b").contains(&"./run.b".to_owned()));
+    }
+
+    #[test]
+    fn extract_paths_js_runtimes() {
+        for cmd in ["node /tmp/x.js", "deno /tmp/x.js", "bun /tmp/x.js"] {
+            assert!(
+                extract_executed_paths(cmd).contains(&"/tmp/x.js".to_owned()),
+                "interpreter branch missed: {cmd}"
+            );
+        }
+        assert!(extract_executed_paths("/tmp/plugin.mjs")
+            .contains(&"/tmp/plugin.mjs".to_owned()));
+    }
+
+    // ── Command position (the 2026-08-18 false-BLOCK fix) ─────────
+    //
+    // Each string below is a MEASURED pre-fix false positive, transcribed from
+    // the reproduction rather than imagined. They are the red-run receipt for
+    // this class: restore the old any-index interpreter branch and these three
+    // go red while nothing else does.
+
+    #[test]
+    fn extract_paths_interpreter_mentioned_not_invoked() {
+        // `rg python3 /tmp/evil.py` used to yield ["/tmp/evil.py"] — a chain
+        // block on a command that executes nothing. This is the one that
+        // mattered, because the path is real and may be journaled dangerous.
+        assert_eq!(
+            extract_executed_paths("rg python3 /tmp/nonscript"),
+            Vec::<String>::new()
+        );
+        assert_eq!(extract_executed_paths("rg bash ."), Vec::<String>::new());
+        assert_eq!(
+            extract_executed_paths("grep -rn sh src/"),
+            Vec::<String>::new()
+        );
+    }
+
+    /// The fix must not cost the true positives it exists beside: an
+    /// interpreter really in command position still resolves, including after
+    /// a shell operator, behind assignments, and behind transparent wrappers.
+    #[test]
+    fn extract_paths_command_position_still_finds_real_invocations() {
+        for cmd in [
+            "bash /tmp/real.sh",
+            "cd /tmp && bash /tmp/real.sh",
+            "FOO=1 bash /tmp/real.sh",
+            "env FOO=1 sudo bash /tmp/real.sh",
+            "ls; tatara-script /tmp/real.sh",
+            "cat x | python3 /tmp/real.sh",
+        ] {
+            assert!(
+                extract_executed_paths(cmd).contains(&"/tmp/real.sh".to_owned()),
+                "command-position invocation missed: {cmd}"
+            );
+        }
+    }
+
+    /// A negative control for the widened lists: adding extensions must not
+    /// make ordinary commands look like script execution. `.b` is the shortest
+    /// entry and therefore the likeliest to over-match, so it is named here.
+    #[test]
+    fn extract_paths_widened_lists_do_not_over_match() {
+        for benign in [
+            "ls -la /tmp/lib",
+            "cargo build --release",
+            "git show HEAD:src/main.rs",
+            "rg tatara-script .",
+        ] {
+            assert!(
+                extract_executed_paths(benign).is_empty(),
+                "false positive on: {benign}"
+            );
+        }
     }
 
     #[test]
