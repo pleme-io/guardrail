@@ -28,7 +28,7 @@ enum Command {
     Validate,
     /// List all active rules.
     List,
-    /// PostToolUse advice for Grep|Glob: nudge toward `mcp__zoekt__search`.
+    /// PostToolUse advice for Grep|Glob: nudge toward the codesearch index.
     SearchAdvise,
     /// PreToolUse nudge for Grep|Glob (advisory-only; never denies — yet).
     SearchNudge,
@@ -196,19 +196,51 @@ fn emit_block(rule: &str, message: &str) -> ! {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Search-leverage nudge — steer Grep|Glob toward mcp__zoekt__search
+// Search-leverage nudge — steer Grep|Glob toward the codesearch index
 // ═══════════════════════════════════════════════════════════════════
 //
-// pleme-io repos are trigram-indexed by a warm zoekt daemon. A Grep/Glob
-// over an indexed repo scans + reads whole files (~20–100K tokens) where a
-// pre-indexed `mcp__zoekt__search` lookup answers the same question for ~50.
-// These two subcommands ride the Grep|Glob hook matchers wired in
-// blackmatter-claude and nudge the agent toward the index at the decision
-// point. Both are ADVISORY-FIRST — neither ever blocks or errors the tool
-// call (always exit 0; a parse failure emits nothing).
+// pleme-io repos are indexed by codesearch. A Grep/Glob over an indexed repo
+// scans + reads whole files (~20–100K tokens) where a pre-indexed lookup
+// answers the same question for ~50. These two subcommands ride the Grep|Glob
+// hook matchers wired in blackmatter-claude and nudge the agent toward the
+// index at the decision point. Both are ADVISORY-FIRST — neither ever blocks
+// or errors the tool call (always exit 0; a parse failure emits nothing).
+//
+// ── WHY THIS NAMES codesearch AND NOT zoekt (corrected 2026-08-18)
+//
+// This message pointed at `mcp__zoekt__search` from its inception. **Zoekt was
+// RETIRED fleet-wide on 2026-08-12** — all three surfaces (claude MCP, anvil
+// MCP, the indexing daemon) are typed-flipped to `enable = false` and the
+// generation carries zero zoekt store paths with its launchd jobs unloaded.
+// So this hook spent its whole life after that date advising every agent, on
+// every Grep and every Glob, to call into a dead plane: a nudge that costs a
+// tool round-trip and returns either a hard failure or an answer off stale
+// shards. That is worse than no nudge, because it is a *confident* wrong
+// answer — the exact failure mode the retirement's own parity gate was built
+// to avoid.
+//
+// The retirement was measured, not planned (`codesearch parity --gate` exits
+// 0: corpus 1171/1171 zoekt repos, 0 missing; 15/15 capabilities served), and
+// codesearch's EXACT plane is the direct replacement for what zoekt served.
+// Two things the message must get right, because both are load-bearing:
+//
+//   * `search_exact` accepts zoekt-style filters in ONE query string
+//     (`lang:rust case:yes fn\s+main`), so the operator's zoekt muscle memory
+//     transfers. But `repo:`, `branch:`, `sym:` and `kind:` belong to OTHER
+//     tools and are REFUSED with an error naming the right one rather than
+//     silently ignored — so this message must not advertise `sym:`, which the
+//     zoekt-era text did.
+//   * `files_scanned: 0` means a broken walk or a near-empty resolved db, NOT
+//     "no matches". Saying so here is what stops an agent reading a zero as
+//     absence, which is the one way this nudge could cause a wrong conclusion.
 
-/// The Grep/Glob → zoekt redirect message, shared by both hooks.
-const SEARCH_NUDGE_MSG: &str = "That Grep/Glob ran over an indexed repo — mcp__zoekt__search (sym:Name / file:pat lang:X / regex) is a pre-indexed lookup (~50 tokens) vs scanning + reading whole files (~20–100K). Next time search first, then Read only the exact range it points to.";
+/// The Grep/Glob → codesearch redirect message, shared by both hooks.
+///
+/// Names the three planes an agent actually needs and the one result that is
+/// routinely misread. Kept to a single line: it is injected as
+/// `additionalContext` on every Grep|Glob call, so its token cost is paid
+/// hundreds of times a day.
+const SEARCH_NUDGE_MSG: &str = "That Grep/Glob ran over an indexed repo — codesearch is a pre-indexed lookup (~50 tokens) vs scanning + reading whole files (~20–100K). Use mcp__codesearch__search_exact for regex/literal (it takes zoekt-style `lang:` / `file:` / `case:` filters in one query string), mcp__codesearch__semantic_search for intent, mcp__codesearch__search_repos to fan out across repos, mcp__codesearch__find_all_references for every call site. Then Read only the exact range it points to. Note `files_scanned: 0` means a broken walk or an empty resolved db — never read it as `no matches`.";
 
 /// Whether a hook payload's tool is one this nudge applies to.
 ///
@@ -219,7 +251,7 @@ fn is_search_tool(tool_name: Option<&str>) -> bool {
 }
 
 /// `PostToolUse` hook for Grep|Glob. Emits advisory context (modern hook JSON)
-/// nudging toward `mcp__zoekt__search`, then exits 0.
+/// nudging toward the codesearch index, then exits 0.
 ///
 /// Never errors the tool call: a parse failure or a non-search tool emits
 /// nothing and still exits 0.
@@ -247,7 +279,7 @@ fn cmd_search_advise() -> Result<()> {
 // bare-identifier pattern (^[A-Za-z_][A-Za-z0-9_]*$) ∧ not single-file-scoped
 // (no `path` narrowing a single file) ∧ index warm -> emit
 // permissionDecision:"deny" with a redirect reason pointing at
-// mcp__zoekt__search. The Grep/Glob fields captured on ToolInput
+// mcp__codesearch__search_exact. The Grep/Glob fields captured on ToolInput
 // (pattern/path/glob/output_mode) exist precisely so this deny path is one
 // edit away. Advisory-first is the deliberate design choice: prove the
 // signal is high before ever blocking a tool call.

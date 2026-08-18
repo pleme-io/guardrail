@@ -119,7 +119,10 @@ fn search_advise_emits_context_for_grep() {
         .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"fn main"}}"#)
         .assert()
         .success()
-        .stdout(predicate::str::contains("mcp__zoekt__search"))
+        .stdout(predicate::str::contains("mcp__codesearch__search_exact"))
+        // Pins the RETIREMENT, not just the current string: zoekt was retired
+        // 2026-08-12 and this assertion is what stops the dead plane coming back.
+        .stdout(predicate::str::contains("mcp__zoekt__search").not())
         .stdout(predicate::str::contains("PostToolUse"))
         .stdout(predicate::str::contains("additionalContext"));
 }
@@ -131,7 +134,8 @@ fn search_advise_emits_context_for_glob() {
         .write_stdin(r#"{"tool_name":"Glob","tool_input":{"glob":"**/*.rs"}}"#)
         .assert()
         .success()
-        .stdout(predicate::str::contains("mcp__zoekt__search"));
+        .stdout(predicate::str::contains("mcp__codesearch__search_exact"))
+        .stdout(predicate::str::contains("mcp__zoekt__search").not());
 }
 
 #[test]
