@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "18311b07f2a410dab15d076cb3f6566e0aed0fd7d2e8dbb9a406c4b81df3f4f6",
+  "cargo_lock_sha256": "6b84848e134b195778f0df26b0e3fd12c8a2b48394c931c554ecb0705d4e57c6",
   "manifest_sha256": {
-    "Cargo.toml": "5a94cf5b1931dd8dceeb171c19436f800d59de69ef81551a45ae3f97b06cd1d2"
+    "Cargo.toml": "6b648db8b01adcea7fcf89f9bb00ca02dfaf531fa1e33ab3e2d04b5e6e571cc7"
   },
   "target_resolves": {
     "base": {
@@ -574,7 +574,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.5": {
+      "guardrail-0.1.6": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -610,7 +610,7 @@
           },
           {
             "name": "okiba",
-            "package_key": "okiba-0.3.1",
+            "package_key": "okiba-0.3.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -800,7 +800,7 @@
         ],
         "features": []
       },
-      "okiba-0.3.1": {
+      "okiba-0.3.2": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -2210,7 +2210,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.5": {
+    "guardrail-0.1.6": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2258,7 +2258,7 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "okiba-0.3.1": {
+    "okiba-0.3.2": {
       "edition": "2024"
     },
     "once_cell-1.21.4": {

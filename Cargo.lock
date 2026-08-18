@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "guardrail"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -303,9 +303,9 @@ dependencies = [
 
 [[package]]
 name = "okiba"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2745781cfe55f34a9721f4e6b2ea5b154b06d7ba6b7f910a666ffedfad510cfc"
+checksum = "40b8caa7442800b6d332c8ff36c15ea247f5038ddafac247c7a4f53905512b0d"
 
 [[package]]
 name = "once_cell"
