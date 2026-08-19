@@ -27,21 +27,25 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # build + stage + sha256 in one step. The `command -v shasum` fallback
+      # disappears rather than moving: it existed because macOS ships shasum and
+      # Linux ships sha256sum, and the action computes the digest itself instead
+      # of shelling out to whichever one the runner happens to have.
       - name: Build
-        run: |
-          cargo build --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/guardrail ./guardrail-${{ matrix.slug }}
-          if command -v shasum &> /dev/null; then
-            shasum -a 256 guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
-          else
-            sha256sum guardrail-${{ matrix.slug }} > guardrail-${{ matrix.slug }}.sha256
-          fi
+        uses: pleme-io/actions/rust-cross-build@main
+        with:
+          binary-name: guardrail
+          target: ${{ matrix.target }}
+          suffix: ${{ matrix.slug }}
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: guardrail-${{ matrix.slug }}
-          path: guardrail-${{ matrix.slug }}*
+          # rust-cross-build stages into dist/. upload-artifact strips to the
+          # common ancestor, so the artifact's contents are unchanged and the
+          # publish job's `release/guardrail-*` glob still matches.
+          path: dist/guardrail-${{ matrix.slug }}*
           retention-days: 90
 
   publish:
