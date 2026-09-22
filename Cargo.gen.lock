@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "6b84848e134b195778f0df26b0e3fd12c8a2b48394c931c554ecb0705d4e57c6",
+  "cargo_lock_sha256": "0251ad88333539c8ce67f92b958ebb5180091a660bddd1e2a6435c9166daf9f7",
   "manifest_sha256": {
-    "Cargo.toml": "6b648db8b01adcea7fcf89f9bb00ca02dfaf531fa1e33ab3e2d04b5e6e571cc7"
+    "Cargo.toml": "c0fdb6190215f59186456f26315af55be7c630c71ebff6f3623c85bb634f5520"
   },
   "target_resolves": {
     "base": {
@@ -208,7 +208,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "bitflags-2.13.1": {
+      "bitflags-2.13.2": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
@@ -248,16 +248,16 @@
           "unicode"
         ]
       },
-      "cfg-if-1.0.4": {
+      "cfg-if-1.0.5": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
       },
-      "clap-4.6.6": {
+      "clap-4.6.7": {
         "runtime_dependencies": [
           {
             "name": "clap_builder",
-            "package_key": "clap_builder-4.6.6",
+            "package_key": "clap_builder-4.6.7",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -267,7 +267,7 @@
           },
           {
             "name": "clap_derive",
-            "package_key": "clap_derive-4.6.4",
+            "package_key": "clap_derive-4.6.7",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -288,7 +288,7 @@
           "usage"
         ]
       },
-      "clap_builder-4.6.6": {
+      "clap_builder-4.6.7": {
         "runtime_dependencies": [
           {
             "name": "anstream",
@@ -312,7 +312,7 @@
           },
           {
             "name": "clap_lex",
-            "package_key": "clap_lex-1.1.0",
+            "package_key": "clap_lex-1.1.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -341,7 +341,7 @@
           "usage"
         ]
       },
-      "clap_derive-4.6.4": {
+      "clap_derive-4.6.7": {
         "runtime_dependencies": [
           {
             "name": "heck",
@@ -375,7 +375,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.3",
+            "package_key": "syn-3.0.6",
             "kind": "normal",
             "features": [
               "full"
@@ -391,7 +391,7 @@
           "default"
         ]
       },
-      "clap_lex-1.1.0": {
+      "clap_lex-1.1.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -482,7 +482,7 @@
         "runtime_dependencies": [
           {
             "name": "cfg_if",
-            "package_key": "cfg-if-1.0.4",
+            "package_key": "cfg-if-1.0.5",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -574,7 +574,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.6": {
+      "guardrail-0.1.7": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -588,7 +588,7 @@
           },
           {
             "name": "clap",
-            "package_key": "clap-4.6.6",
+            "package_key": "clap-4.6.7",
             "kind": "normal",
             "features": [
               "derive"
@@ -722,7 +722,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "indexmap-2.14.0": {
+      "indexmap-2.14.2": {
         "runtime_dependencies": [
           {
             "name": "equivalent",
@@ -922,7 +922,7 @@
         "runtime_dependencies": [
           {
             "name": "unicode_ident",
-            "package_key": "unicode-ident-1.0.24",
+            "package_key": "unicode-ident-1.0.26",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1176,7 +1176,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.3",
+            "package_key": "syn-3.0.6",
             "kind": "normal",
             "features": [
               "clone-impls",
@@ -1249,7 +1249,7 @@
         "runtime_dependencies": [
           {
             "name": "indexmap",
-            "package_key": "indexmap-2.14.0",
+            "package_key": "indexmap-2.14.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1306,7 +1306,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "syn-3.0.3": {
+      "syn-3.0.6": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -1330,7 +1330,7 @@
           },
           {
             "name": "unicode_ident",
-            "package_key": "unicode-ident-1.0.24",
+            "package_key": "unicode-ident-1.0.26",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1386,7 +1386,7 @@
           },
           {
             "name": "rustix",
-            "package_key": "rustix-1.1.4",
+            "package_key": "rustix-1.1.5",
             "kind": "normal",
             "features": [
               "fs"
@@ -1451,7 +1451,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.3",
+            "package_key": "syn-3.0.6",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1463,7 +1463,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "unicode-ident-1.0.24": {
+      "unicode-ident-1.0.26": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -1505,11 +1505,11 @@
     "targets": {
       "aarch64-apple-darwin": {
         "overrides": {
-          "rustix-1.1.4": {
+          "rustix-1.1.5": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.13.1",
+                "package_key": "bitflags-2.13.2",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1592,11 +1592,11 @@
               "no_std"
             ]
           },
-          "rustix-1.1.4": {
+          "rustix-1.1.5": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.13.1",
+                "package_key": "bitflags-2.13.2",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1710,11 +1710,11 @@
               "no_std"
             ]
           },
-          "rustix-1.1.4": {
+          "rustix-1.1.5": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.13.1",
+                "package_key": "bitflags-2.13.2",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1816,11 +1816,11 @@
       },
       "x86_64-apple-darwin": {
         "overrides": {
-          "rustix-1.1.4": {
+          "rustix-1.1.5": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.13.1",
+                "package_key": "bitflags-2.13.2",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1903,11 +1903,11 @@
               "no_std"
             ]
           },
-          "rustix-1.1.4": {
+          "rustix-1.1.5": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.13.1",
+                "package_key": "bitflags-2.13.2",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2021,11 +2021,11 @@
               "no_std"
             ]
           },
-          "rustix-1.1.4": {
+          "rustix-1.1.5": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.13.1",
+                "package_key": "bitflags-2.13.2",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2160,16 +2160,16 @@
     "autocfg-1.5.1": {
       "edition": "2015"
     },
-    "bitflags-2.13.1": {
+    "bitflags-2.13.2": {
       "edition": "2021"
     },
     "bstr-1.13.1": {
       "edition": "2021"
     },
-    "cfg-if-1.0.4": {
+    "cfg-if-1.0.5": {
       "edition": "2018"
     },
-    "clap-4.6.6": {
+    "clap-4.6.7": {
       "edition": "2024",
       "binaries": [
         {
@@ -2178,14 +2178,14 @@
         }
       ]
     },
-    "clap_builder-4.6.6": {
+    "clap_builder-4.6.7": {
       "edition": "2024"
     },
-    "clap_derive-4.6.4": {
+    "clap_derive-4.6.7": {
       "edition": "2024",
       "proc_macro": true
     },
-    "clap_lex-1.1.0": {
+    "clap_lex-1.1.1": {
       "edition": "2024"
     },
     "colorchoice-1.0.5": {
@@ -2210,7 +2210,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.6": {
+    "guardrail-0.1.7": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2232,7 +2232,7 @@
     "heck-0.5.0": {
       "edition": "2021"
     },
-    "indexmap-2.14.0": {
+    "indexmap-2.14.2": {
       "edition": "2024"
     },
     "is_terminal_polyfill-1.70.2": {
@@ -2290,7 +2290,7 @@
     "regex-syntax-0.8.11": {
       "edition": "2021"
     },
-    "rustix-1.1.4": {
+    "rustix-1.1.5": {
       "edition": "2021",
       "build_script": "build.rs"
     },
@@ -2319,7 +2319,7 @@
     "strsim-0.11.1": {
       "edition": "2015"
     },
-    "syn-3.0.3": {
+    "syn-3.0.6": {
       "edition": "2021"
     },
     "tempfile-3.27.0": {
@@ -2336,7 +2336,7 @@
       "edition": "2021",
       "proc_macro": true
     },
-    "unicode-ident-1.0.24": {
+    "unicode-ident-1.0.26": {
       "edition": "2021"
     },
     "unsafe-libyaml-0.2.11": {
