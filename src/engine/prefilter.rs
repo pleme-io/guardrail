@@ -96,6 +96,12 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     // segment, so one more entry is one more short comparison on the hot path —
     // paid to make a footgun catchable rather than re-learnable.
     "pgrep",
+    // macOS preferences — `defaults write|delete|import` mutates the defaults
+    // DB outside nix-darwin, which is how cid and ryn drifted to two different
+    // Spaces-swipe animations with identical declared config (2026-09-21).
+    // Both spellings: `starts_with` never sees `defaults` inside the
+    // absolute path.
+    "defaults", "/usr/bin/defaults",
 ];
 
 static PREFIX_SET: LazyLock<HashSet<&'static str>> =

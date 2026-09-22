@@ -218,3 +218,25 @@
   category: process
   test_block: "until ! pgrep -f 'darwin-rebuild switch'; do sleep 10; done"
   test_allow: "echo 'a pgrep -f wait loop can match its own command line and hang'"
+
+# ── macOS preferences mutated outside nix-darwin ────────────────────
+# macOS state is declared in pleme.darwin.* (nix-darwin system.defaults) and
+# nowhere else. A hand-run `defaults write` works, persists, and is invisible
+# to every other node, so the fleet drifts without any config diff to show it.
+#
+# Receipt, 2026-09-21: cid and ryn had identical declared trackpad config, yet
+# ryn's four-finger Spaces swipe crossfaded and cid's slid. ryn carried an
+# undeclared com.apple.universalaccess reduceMotion = 1 that no module wrote.
+# Fixed by declaring it (pleme.darwin.shell.trackpad, pleme-io/nix 5b012573).
+#
+# `block` by OPERATOR OVERRIDE ("force ourselves to manage it declaratively"),
+# the same L0 basis as the sed rules above. Reads (`defaults read`,
+# `defaults domains`) are untouched; they are how drift gets found. The
+# declarative path is the `declarative-macos` skill.
+- name: macos-defaults-write-not-declared
+  pattern: '(^|[;&|]\s*|["'']\s*)(sudo\s+(-u\s+\S+\s+)?)?(/usr/bin/)?defaults\s+(-currentHost\s+)?(write|delete|import|rename)\b'
+  severity: block
+  message: "Hand-mutating the macOS defaults DB — the change persists on this Mac only, with no config diff, and that is how cid and ryn drifted apart. Declare it instead: a typed pleme.darwin.* option (nix-darwin system.defaults.*; CustomUserPreferences only for keys nix-darwin doesn't model), then rebuild. `defaults read` is unaffected. See the declarative-macos skill."
+  category: nix
+  test_block: "defaults write com.apple.universalaccess reduceMotion -bool false"
+  test_allow: "defaults read com.apple.universalaccess reduceMotion"

@@ -844,3 +844,53 @@ mod pleme_doctrine_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod macos_defaults_tests {
+    use super::*;
+    use crate::model::{Rule, Severity};
+
+    fn engine() -> RegexEngine {
+        let rules: Vec<Rule> = serde_yaml::from_str(include_str!("../rules/pleme-doctrine.yaml"))
+            .expect("pleme-doctrine.yaml must parse");
+        let r = rules.iter().find(|r| r.name == "macos-defaults-write-not-declared")
+            .expect("rule 'macos-defaults-write-not-declared' is missing");
+        assert_eq!(r.severity, Severity::Block, "declared-only macOS state is Block by operator override");
+        RegexEngine::new(rules).expect("compiles")
+    }
+
+    /// Each shape an agent actually uses to reach the defaults DB. The
+    /// production prefilter runs here, so a spelling missing from
+    /// DANGEROUS_PREFIXES fails this test instead of being fast-rejected.
+    #[test]
+    fn fires_on_every_mutation_shape() {
+        let engine = engine();
+        for cmd in [
+            "defaults write com.apple.dock autohide -bool true",
+            "/usr/bin/defaults write com.apple.universalaccess reduceMotion -bool false",
+            "sudo -u luis defaults write NSGlobalDomain KeyRepeat -int 1",
+            "defaults -currentHost write com.apple.screensaver idleTime 0",
+            "defaults delete com.apple.dock persistent-apps",
+            "defaults import com.apple.dock dock.plist",
+            "ssh ryn '/usr/bin/defaults write com.apple.dock mru-spaces -bool false'",
+            "cd /tmp && defaults write com.apple.finder AppleShowAllFiles true",
+        ] {
+            assert!(!matches!(engine.check(cmd), Decision::Allow), "must fire on: {cmd}");
+        }
+    }
+
+    /// Reading is how drift is found; blocking it would remove the sensor.
+    #[test]
+    fn allows_reads_and_prose() {
+        let engine = engine();
+        for cmd in [
+            "defaults read com.apple.dock",
+            "/usr/bin/defaults read com.apple.AppleMultitouchTrackpad",
+            "ssh ryn '/usr/bin/defaults read com.apple.universalaccess'",
+            "defaults domains",
+            "echo 'declare it instead of running defaults write by hand'",
+        ] {
+            assert!(matches!(engine.check(cmd), Decision::Allow), "must not fire on: {cmd}");
+        }
+    }
+}
