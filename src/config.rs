@@ -11,11 +11,9 @@ use crate::model::{GuardrailConfig, Rule};
 /// via the XDG Base Directory Specification.
 #[must_use]
 pub fn xdg_dir(env_var: &str, fallback_suffix: &str) -> PathBuf {
-    env::var(env_var)
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(env::var("HOME").unwrap_or_default()).join(fallback_suffix)
-        })
+    env::var(env_var).map(PathBuf::from).unwrap_or_else(|_| {
+        PathBuf::from(env::var("HOME").unwrap_or_default()).join(fallback_suffix)
+    })
 }
 
 const DEFAULTS_YAML: &str = include_str!("../rules/defaults.yaml");
@@ -47,7 +45,9 @@ pub struct DefaultsProvider;
 
 impl RuleProvider for DefaultsProvider {
     #[allow(clippy::unnecessary_literal_bound)]
-    fn name(&self) -> &str { "defaults" }
+    fn name(&self) -> &str {
+        "defaults"
+    }
 
     fn rules(&self) -> anyhow::Result<Vec<Rule>> {
         Ok(serde_yaml::from_str(DEFAULTS_YAML)?)
@@ -62,7 +62,9 @@ pub struct DirectoryProvider {
 
 impl RuleProvider for DirectoryProvider {
     #[allow(clippy::unnecessary_literal_bound)]
-    fn name(&self) -> &str { "directory" }
+    fn name(&self) -> &str {
+        "directory"
+    }
 
     fn rules(&self) -> anyhow::Result<Vec<Rule>> {
         let mut rules = Vec::new();
@@ -76,8 +78,8 @@ impl RuleProvider for DirectoryProvider {
             .collect();
         paths.sort();
         for path in paths {
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("reading {}", path.display()))?;
+            let content =
+                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
             let batch: Vec<Rule> = serde_yaml::from_str(&content)
                 .with_context(|| format!("parsing {}", path.display()))?;
             rules.extend(batch);
@@ -93,7 +95,9 @@ pub struct MockProvider {
 }
 
 impl RuleProvider for MockProvider {
-    fn name(&self) -> &str { &self.label }
+    fn name(&self) -> &str {
+        &self.label
+    }
 
     fn rules(&self) -> anyhow::Result<Vec<Rule>> {
         Ok(self.rules.clone())
@@ -147,7 +151,9 @@ pub fn resolve(
 /// indicates a build-time invariant violation.
 #[must_use]
 pub fn default_rules() -> Vec<Rule> {
-    DefaultsProvider.rules().expect("compiled-in defaults.yaml must be valid")
+    DefaultsProvider
+        .rules()
+        .expect("compiled-in defaults.yaml must be valid")
 }
 
 /// Shikumi config path: `~/.config/guardrail/guardrail.yaml`
@@ -177,10 +183,9 @@ pub fn load_user_config(path: &Path) -> anyhow::Result<GuardrailConfig> {
     if !path.exists() {
         return Ok(GuardrailConfig::default());
     }
-    let content = fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?;
-    serde_yaml::from_str(&content)
-        .with_context(|| format!("parsing {}", path.display()))
+    let content =
+        fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    serde_yaml::from_str(&content).with_context(|| format!("parsing {}", path.display()))
 }
 
 /// Legacy convenience: merge defaults + user config.
@@ -191,7 +196,10 @@ pub fn load_user_config(path: &Path) -> anyhow::Result<GuardrailConfig> {
 /// since mock providers always succeed.
 #[must_use]
 pub fn resolve_rules(defaults: &[Rule], config: &GuardrailConfig) -> Vec<Rule> {
-    let provider = MockProvider { label: "defaults".into(), rules: defaults.to_vec() };
+    let provider = MockProvider {
+        label: "defaults".into(),
+        rules: defaults.to_vec(),
+    };
     resolve(&[&provider], config).expect("mock provider cannot fail")
 }
 
@@ -218,18 +226,27 @@ mod tests {
     #[test]
     fn defaults_parse() {
         let rules = DefaultsProvider.rules().unwrap();
-        assert!(rules.len() >= 25, "expected 25+ default rules, got {}", rules.len());
+        assert!(
+            rules.len() >= 25,
+            "expected 25+ default rules, got {}",
+            rules.len()
+        );
     }
 
     #[test]
     fn defaults_have_all_categories() {
         let rules = DefaultsProvider.rules().unwrap();
-        let cats: std::collections::BTreeSet<Category> =
-            rules.iter().map(|r| r.category).collect();
+        let cats: std::collections::BTreeSet<Category> = rules.iter().map(|r| r.category).collect();
         for cat in [
-            Category::Filesystem, Category::Git, Category::Database,
-            Category::Kubernetes, Category::Nix, Category::Docker,
-            Category::Secrets, Category::Terraform, Category::Flux,
+            Category::Filesystem,
+            Category::Git,
+            Category::Database,
+            Category::Kubernetes,
+            Category::Nix,
+            Category::Docker,
+            Category::Secrets,
+            Category::Terraform,
+            Category::Flux,
         ] {
             assert!(cats.contains(&cat), "missing category: {cat:?}");
         }
@@ -240,12 +257,13 @@ mod tests {
     #[test]
     fn directory_provider_loads_yaml() {
         let dir = TempDir::new().unwrap();
-        let yaml = serde_yaml::to_string(&vec![
-            test_rule("custom-fs", Category::Filesystem),
-        ]).unwrap();
+        let yaml =
+            serde_yaml::to_string(&vec![test_rule("custom-fs", Category::Filesystem)]).unwrap();
         fs::write(dir.path().join("custom.yaml"), &yaml).unwrap();
 
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         let rules = provider.rules().unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].name, "custom-fs");
@@ -254,14 +272,20 @@ mod tests {
     #[test]
     fn directory_provider_loads_multiple_files() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("a.yaml"),
-            serde_yaml::to_string(&vec![test_rule("rule-a", Category::Git)]).unwrap()
-        ).unwrap();
-        fs::write(dir.path().join("b.yaml"),
-            serde_yaml::to_string(&vec![test_rule("rule-b", Category::Docker)]).unwrap()
-        ).unwrap();
+        fs::write(
+            dir.path().join("a.yaml"),
+            serde_yaml::to_string(&vec![test_rule("rule-a", Category::Git)]).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("b.yaml"),
+            serde_yaml::to_string(&vec![test_rule("rule-b", Category::Docker)]).unwrap(),
+        )
+        .unwrap();
 
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         let rules = provider.rules().unwrap();
         assert_eq!(rules.len(), 2);
     }
@@ -269,14 +293,20 @@ mod tests {
     #[test]
     fn directory_provider_deterministic_order() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("z.yaml"),
-            serde_yaml::to_string(&vec![test_rule("z-rule", Category::Git)]).unwrap()
-        ).unwrap();
-        fs::write(dir.path().join("a.yaml"),
-            serde_yaml::to_string(&vec![test_rule("a-rule", Category::Git)]).unwrap()
-        ).unwrap();
+        fs::write(
+            dir.path().join("z.yaml"),
+            serde_yaml::to_string(&vec![test_rule("z-rule", Category::Git)]).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("a.yaml"),
+            serde_yaml::to_string(&vec![test_rule("a-rule", Category::Git)]).unwrap(),
+        )
+        .unwrap();
 
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         let rules = provider.rules().unwrap();
         assert_eq!(rules[0].name, "a-rule"); // sorted by filename
         assert_eq!(rules[1].name, "z-rule");
@@ -285,13 +315,17 @@ mod tests {
     #[test]
     fn directory_provider_empty_dir() {
         let dir = TempDir::new().unwrap();
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         assert!(provider.rules().unwrap().is_empty());
     }
 
     #[test]
     fn directory_provider_missing_dir() {
-        let provider = DirectoryProvider { dir: PathBuf::from("/nonexistent") };
+        let provider = DirectoryProvider {
+            dir: PathBuf::from("/nonexistent"),
+        };
         assert!(provider.rules().unwrap().is_empty());
     }
 
@@ -335,7 +369,10 @@ mod tests {
         };
         let mut cats = BTreeMap::new();
         cats.insert(Category::Git, false);
-        let config = GuardrailConfig { categories: cats, ..Default::default() };
+        let config = GuardrailConfig {
+            categories: cats,
+            ..Default::default()
+        };
         let rules = resolve(&[&p], &config).unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].name, "fs-rule");
@@ -361,7 +398,10 @@ mod tests {
 
     #[test]
     fn resolve_appends_extra_rules() {
-        let p = MockProvider { label: "test".into(), rules: vec![] };
+        let p = MockProvider {
+            label: "test".into(),
+            rules: vec![],
+        };
         let config = GuardrailConfig {
             extra_rules: vec![test_rule("extra", Category::Secrets)],
             ..Default::default()
@@ -373,7 +413,10 @@ mod tests {
 
     #[test]
     fn resolve_extra_rules_respect_category_toggle() {
-        let p = MockProvider { label: "test".into(), rules: vec![] };
+        let p = MockProvider {
+            label: "test".into(),
+            rules: vec![],
+        };
         let mut cats = BTreeMap::new();
         cats.insert(Category::Secrets, false);
         let config = GuardrailConfig {
@@ -412,7 +455,11 @@ mod tests {
     fn akeyless_suite_parses() {
         let yaml = include_str!("../rules/akeyless.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
-        assert!(rules.len() >= 30, "expected 30+ akeyless rules, got {}", rules.len());
+        assert!(
+            rules.len() >= 30,
+            "expected 30+ akeyless rules, got {}",
+            rules.len()
+        );
         assert!(rules.iter().all(|r| r.category == Category::Akeyless));
     }
 
@@ -420,7 +467,11 @@ mod tests {
     fn aws_suite_parses() {
         let yaml = include_str!("../rules/aws.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
-        assert!(rules.len() >= 20, "expected 20+ aws rules, got {}", rules.len());
+        assert!(
+            rules.len() >= 20,
+            "expected 20+ aws rules, got {}",
+            rules.len()
+        );
         assert!(rules.iter().all(|r| r.category == Category::Cloud));
     }
 
@@ -466,7 +517,11 @@ mod tests {
     fn sql_suite_parses() {
         let yaml = include_str!("../rules/sql.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
-        assert!(rules.len() >= 35, "expected 35+ sql rules, got {}", rules.len());
+        assert!(
+            rules.len() >= 35,
+            "expected 35+ sql rules, got {}",
+            rules.len()
+        );
         assert!(rules.iter().all(|r| r.category == Category::Database));
     }
 
@@ -484,7 +539,9 @@ mod tests {
     fn load_user_config_valid_yaml() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("guardrail.yaml");
-        fs::write(&path, r#"
+        fs::write(
+            &path,
+            r#"
 categories:
   git: false
 disabledRules:
@@ -495,7 +552,9 @@ extraRules:
     severity: warn
     message: "custom rule"
     category: secrets
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         let config = load_user_config(&path).unwrap();
         assert_eq!(config.categories.get(&Category::Git), Some(&false));
         assert_eq!(config.disabled_rules, vec!["rm-rf-root"]);
@@ -593,7 +652,8 @@ extraRules:
         assert!(
             rd.starts_with(&cd),
             "rules_dir ({}) should be inside config_dir ({})",
-            rd.display(), cd.display()
+            rd.display(),
+            cd.display()
         );
     }
 
@@ -608,7 +668,9 @@ extraRules:
         fs::write(dir.path().join("rules.json"), "{}").unwrap();
         fs::write(dir.path().join("notes.txt"), "random text").unwrap();
 
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         let rules = provider.rules().unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].name, "yaml-rule");
@@ -620,7 +682,9 @@ extraRules:
         let yaml = serde_yaml::to_string(&vec![test_rule("yml-rule", Category::Nix)]).unwrap();
         fs::write(dir.path().join("rules.yml"), &yaml).unwrap();
 
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         let rules = provider.rules().unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].name, "yml-rule");
@@ -631,7 +695,9 @@ extraRules:
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("bad.yaml"), "not: [valid: yaml: {{{{").unwrap();
 
-        let provider = DirectoryProvider { dir: dir.path().to_path_buf() };
+        let provider = DirectoryProvider {
+            dir: dir.path().to_path_buf(),
+        };
         let result = provider.rules();
         assert!(result.is_err());
     }
@@ -647,7 +713,10 @@ extraRules:
 
     #[test]
     fn resolve_disabled_extra_rules() {
-        let p = MockProvider { label: "test".into(), rules: vec![] };
+        let p = MockProvider {
+            label: "test".into(),
+            rules: vec![],
+        };
         let config = GuardrailConfig {
             extra_rules: vec![test_rule("extra", Category::Filesystem)],
             disabled_rules: vec!["extra".into()],
@@ -671,10 +740,17 @@ extraRules:
         let mut cats = BTreeMap::new();
         cats.insert(Category::Filesystem, false);
         cats.insert(Category::Kubernetes, false);
-        let config = GuardrailConfig { categories: cats, ..Default::default() };
+        let config = GuardrailConfig {
+            categories: cats,
+            ..Default::default()
+        };
         let rules = resolve(&[&p], &config).unwrap();
         assert_eq!(rules.len(), 2);
-        assert!(rules.iter().all(|r| r.category != Category::Filesystem && r.category != Category::Kubernetes));
+        assert!(
+            rules
+                .iter()
+                .all(|r| r.category != Category::Filesystem && r.category != Category::Kubernetes)
+        );
     }
 
     // ─── resolve() error propagation ───────────────────────────
@@ -682,7 +758,9 @@ extraRules:
     struct FailingProvider;
     impl RuleProvider for FailingProvider {
         #[allow(clippy::unnecessary_literal_bound)]
-        fn name(&self) -> &str { "failing" }
+        fn name(&self) -> &str {
+            "failing"
+        }
         fn rules(&self) -> anyhow::Result<Vec<Rule>> {
             anyhow::bail!("provider exploded")
         }
@@ -735,6 +813,9 @@ extraRules:
                 }
             }
         }
-        assert!(dupes.is_empty(), "duplicate rule names across suites: {dupes:?}");
+        assert!(
+            dupes.is_empty(),
+            "duplicate rule names across suites: {dupes:?}"
+        );
     }
 }

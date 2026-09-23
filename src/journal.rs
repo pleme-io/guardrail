@@ -39,8 +39,7 @@ const ENTRY_TTL_SECS: u64 = 300;
 /// write and run JS in this fleet (guardrail itself ships an opencode plugin
 /// that is a `.js` file).
 const SCRIPT_EXTENSIONS: &[&str] = &[
-    ".sh", ".bash", ".py", ".rb", ".pl", ".zsh",
-    // pleme-io first-party languages
+    ".sh", ".bash", ".py", ".rb", ".pl", ".zsh", // pleme-io first-party languages
     ".tlisp", ".b",
     // JS/TS — an agent-written runner is as executable as a shell script
     ".js", ".mjs", ".cjs", ".ts",
@@ -53,11 +52,20 @@ const SCRIPT_EXTENSIONS: &[&str] = &[
 /// executed, so without it `tatara-script /tmp/written.tlisp` read as an
 /// ordinary command.
 const SHELL_INTERPRETERS: &[&str] = &[
-    "bash", "sh", "zsh", "python", "python3", "ruby", "perl",
+    "bash",
+    "sh",
+    "zsh",
+    "python",
+    "python3",
+    "ruby",
+    "perl",
     // pleme-io first-party interpreters
-    "tatara-script", "blue",
+    "tatara-script",
+    "blue",
     // JS/TS runtimes
-    "node", "deno", "bun",
+    "node",
+    "deno",
+    "bun",
 ];
 
 /// A journal entry recording a written file.
@@ -133,9 +141,9 @@ impl WriteJournal {
     #[must_use]
     pub fn is_dangerous(&self, file_path: &str) -> bool {
         let now = now_secs();
-        self.entries.get(file_path).is_some_and(|e| {
-            e.dangerous && now.saturating_sub(e.timestamp) < ENTRY_TTL_SECS
-        })
+        self.entries
+            .get(file_path)
+            .is_some_and(|e| e.dangerous && now.saturating_sub(e.timestamp) < ENTRY_TTL_SECS)
     }
 
     /// Remove expired entries.
@@ -223,7 +231,9 @@ fn split_on_shell_operators(command: &str) -> impl Iterator<Item = &str> {
 /// their argument, so `env FOO=1 sudo bash x.sh` still resolves to `bash`.
 fn command_head(words: &[&str]) -> Option<usize> {
     /// Wrappers whose own argument is the real command.
-    const WRAPPERS: &[&str] = &["env", "sudo", "doas", "nohup", "time", "exec", "command", "nice"];
+    const WRAPPERS: &[&str] = &[
+        "env", "sudo", "doas", "nohup", "time", "exec", "command", "nice",
+    ];
 
     let mut i = 0;
     while i < words.len() {
@@ -233,7 +243,10 @@ fn command_head(words: &[&str]) -> Option<usize> {
             && w.split_once('=').is_some_and(|(k, _)| {
                 !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
             });
-        let basename = Path::new(w).file_name().and_then(|n| n.to_str()).unwrap_or(w);
+        let basename = Path::new(w)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(w);
         if is_assignment || WRAPPERS.contains(&basename) || w.starts_with('-') {
             i += 1;
             continue;
@@ -245,9 +258,7 @@ fn command_head(words: &[&str]) -> Option<usize> {
 
 /// Whether a word looks like a file path.
 fn is_path_like(word: &str) -> bool {
-    word.starts_with('/')
-        || word.starts_with("./")
-        || word.starts_with("~/")
+    word.starts_with('/') || word.starts_with("./") || word.starts_with("~/")
 }
 
 /// Whether a word ends with a known script extension.
@@ -456,8 +467,7 @@ mod tests {
 
     #[test]
     fn extract_paths_blue_both_forms() {
-        assert!(extract_executed_paths("blue /tmp/run.b")
-            .contains(&"/tmp/run.b".to_owned()));
+        assert!(extract_executed_paths("blue /tmp/run.b").contains(&"/tmp/run.b".to_owned()));
         assert!(extract_executed_paths("./run.b").contains(&"./run.b".to_owned()));
     }
 
@@ -469,8 +479,7 @@ mod tests {
                 "interpreter branch missed: {cmd}"
             );
         }
-        assert!(extract_executed_paths("/tmp/plugin.mjs")
-            .contains(&"/tmp/plugin.mjs".to_owned()));
+        assert!(extract_executed_paths("/tmp/plugin.mjs").contains(&"/tmp/plugin.mjs".to_owned()));
     }
 
     // ── Command position (the 2026-08-18 false-BLOCK fix) ─────────
@@ -670,7 +679,10 @@ mod tests {
         let mut journal = WriteJournal::default();
         journal.entries.insert(
             "/tmp/old.sh".to_owned(),
-            JournalEntry { dangerous: true, timestamp: 1000 },
+            JournalEntry {
+                dangerous: true,
+                timestamp: 1000,
+            },
         );
         // record should prune the stale entry
         journal.record("/tmp/new.sh", true);
@@ -695,11 +707,17 @@ mod tests {
         let mut journal = WriteJournal::default();
         journal.entries.insert(
             "/tmp/a.sh".to_owned(),
-            JournalEntry { dangerous: true, timestamp: 100 },
+            JournalEntry {
+                dangerous: true,
+                timestamp: 100,
+            },
         );
         journal.entries.insert(
             "/tmp/b.sh".to_owned(),
-            JournalEntry { dangerous: true, timestamp: 200 },
+            JournalEntry {
+                dangerous: true,
+                timestamp: 200,
+            },
         );
         journal.prune();
         assert!(journal.entries.is_empty());
@@ -711,7 +729,10 @@ mod tests {
         let now = now_secs();
         journal.entries.insert(
             "/tmp/fresh.sh".to_owned(),
-            JournalEntry { dangerous: true, timestamp: now },
+            JournalEntry {
+                dangerous: true,
+                timestamp: now,
+            },
         );
         journal.prune();
         assert_eq!(journal.entries.len(), 1);
@@ -737,7 +758,10 @@ mod tests {
         let mut journal = WriteJournal::default();
         journal.entries.insert(
             "/tmp/ts.sh".to_owned(),
-            JournalEntry { dangerous: true, timestamp: now },
+            JournalEntry {
+                dangerous: true,
+                timestamp: now,
+            },
         );
         journal.save_to(&path).unwrap();
 
@@ -764,7 +788,10 @@ mod tests {
     fn has_script_extension_all_types() {
         for ext in SCRIPT_EXTENSIONS {
             let filename = format!("test{ext}");
-            assert!(has_script_extension(&filename), "expected {filename} to have script extension");
+            assert!(
+                has_script_extension(&filename),
+                "expected {filename} to have script extension"
+            );
         }
     }
 
@@ -780,7 +807,10 @@ mod tests {
     #[test]
     fn extract_paths_interpreter_at_end_no_script() {
         let paths = extract_executed_paths("echo hello && bash");
-        assert!(paths.is_empty(), "bare interpreter with no script should yield nothing");
+        assert!(
+            paths.is_empty(),
+            "bare interpreter with no script should yield nothing"
+        );
     }
 
     #[test]

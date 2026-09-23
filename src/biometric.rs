@@ -141,12 +141,8 @@ pub fn authenticate(rule: &str, message: &str) -> bool {
 #[cfg(target_os = "macos")]
 fn macos_touch_id(rule: &str, message: &str) -> bool {
     // Inform the user what's happening
-    eprintln!(
-        "\x1b[33m⚡ guardrail [{rule}]: {message}\x1b[0m"
-    );
-    eprintln!(
-        "\x1b[36m🔐 Touch ID to override, or press Cancel to block\x1b[0m"
-    );
+    eprintln!("\x1b[33m⚡ guardrail [{rule}]: {message}\x1b[0m");
+    eprintln!("\x1b[36m🔐 Touch ID to override, or press Cancel to block\x1b[0m");
 
     let result = std::process::Command::new("/usr/bin/swift")
         .args(["-e", SWIFT_TOUCH_ID_PROGRAM])

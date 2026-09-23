@@ -80,10 +80,20 @@ impl Category {
     #[must_use]
     pub const fn all() -> &'static [Self] {
         &[
-            Self::Filesystem, Self::Git, Self::Database, Self::Kubernetes,
-            Self::Nix, Self::Docker, Self::Secrets, Self::Terraform,
-            Self::Cloud, Self::Flux, Self::Akeyless, Self::Process,
-            Self::Network, Self::Nosql,
+            Self::Filesystem,
+            Self::Git,
+            Self::Database,
+            Self::Kubernetes,
+            Self::Nix,
+            Self::Docker,
+            Self::Secrets,
+            Self::Terraform,
+            Self::Cloud,
+            Self::Flux,
+            Self::Akeyless,
+            Self::Process,
+            Self::Network,
+            Self::Nosql,
         ]
     }
 }
@@ -346,7 +356,10 @@ mod tests {
     #[test]
     fn severity_invalid_deserialize() {
         let result: Result<Severity, _> = serde_json::from_str(r#""invalid""#);
-        assert!(result.is_err(), "invalid severity should fail to deserialize");
+        assert!(
+            result.is_err(),
+            "invalid severity should fail to deserialize"
+        );
     }
 
     #[test]
@@ -450,11 +463,19 @@ mod tests {
     fn decision_display_all_variants() {
         assert_eq!(Decision::Allow.to_string(), "allow");
         assert_eq!(
-            Decision::Block { rule: "r".into(), message: "m".into() }.to_string(),
+            Decision::Block {
+                rule: "r".into(),
+                message: "m".into()
+            }
+            .to_string(),
             "block [r]: m"
         );
         assert_eq!(
-            Decision::Warn { rule: "r".into(), message: "m".into() }.to_string(),
+            Decision::Warn {
+                rule: "r".into(),
+                message: "m".into()
+            }
+            .to_string(),
             "warn [r]: m"
         );
     }
@@ -462,16 +483,31 @@ mod tests {
     #[test]
     fn decision_equality() {
         assert_eq!(Decision::Allow, Decision::Allow);
-        assert_ne!(Decision::Allow, Decision::Block { rule: "r".into(), message: "m".into() });
         assert_ne!(
-            Decision::Block { rule: "a".into(), message: "m".into() },
-            Decision::Block { rule: "b".into(), message: "m".into() },
+            Decision::Allow,
+            Decision::Block {
+                rule: "r".into(),
+                message: "m".into()
+            }
+        );
+        assert_ne!(
+            Decision::Block {
+                rule: "a".into(),
+                message: "m".into()
+            },
+            Decision::Block {
+                rule: "b".into(),
+                message: "m".into()
+            },
         );
     }
 
     #[test]
     fn decision_debug() {
-        let d = Decision::Block { rule: "test".into(), message: "msg".into() };
+        let d = Decision::Block {
+            rule: "test".into(),
+            message: "msg".into(),
+        };
         let debug = format!("{d:?}");
         assert!(debug.contains("Block"));
         assert!(debug.contains("test"));
@@ -479,7 +515,10 @@ mod tests {
 
     #[test]
     fn decision_clone() {
-        let d = Decision::Warn { rule: "r".into(), message: "m".into() };
+        let d = Decision::Warn {
+            rule: "r".into(),
+            message: "m".into(),
+        };
         let cloned = d.clone();
         assert_eq!(d, cloned);
     }
@@ -487,15 +526,39 @@ mod tests {
     #[test]
     fn decision_is_allowed() {
         assert!(Decision::Allow.is_allowed());
-        assert!(!Decision::Block { rule: "r".into(), message: "m".into() }.is_allowed());
-        assert!(!Decision::Warn { rule: "r".into(), message: "m".into() }.is_allowed());
+        assert!(
+            !Decision::Block {
+                rule: "r".into(),
+                message: "m".into()
+            }
+            .is_allowed()
+        );
+        assert!(
+            !Decision::Warn {
+                rule: "r".into(),
+                message: "m".into()
+            }
+            .is_allowed()
+        );
     }
 
     #[test]
     fn decision_is_blocked() {
         assert!(!Decision::Allow.is_blocked());
-        assert!(Decision::Block { rule: "r".into(), message: "m".into() }.is_blocked());
-        assert!(!Decision::Warn { rule: "r".into(), message: "m".into() }.is_blocked());
+        assert!(
+            Decision::Block {
+                rule: "r".into(),
+                message: "m".into()
+            }
+            .is_blocked()
+        );
+        assert!(
+            !Decision::Warn {
+                rule: "r".into(),
+                message: "m".into()
+            }
+            .is_blocked()
+        );
     }
 
     #[test]
@@ -508,7 +571,10 @@ mod tests {
         assert!(d.is_blocked());
         assert_eq!(
             d,
-            Decision::Block { rule: "test".into(), message: "danger".into() }
+            Decision::Block {
+                rule: "test".into(),
+                message: "danger".into()
+            }
         );
     }
 
@@ -566,13 +632,20 @@ mod tests {
     fn rule_optional_test_fields_skip_serializing() {
         let rule = Rule::builder("no-test", "pat").build();
         let json = serde_json::to_string(&rule).unwrap();
-        assert!(!json.contains("test_block"), "test_block should be skipped when None");
-        assert!(!json.contains("test_allow"), "test_allow should be skipped when None");
+        assert!(
+            !json.contains("test_block"),
+            "test_block should be skipped when None"
+        );
+        assert!(
+            !json.contains("test_allow"),
+            "test_allow should be skipped when None"
+        );
     }
 
     #[test]
     fn rule_deserialize_missing_optional_fields() {
-        let json = r#"{"name":"min","pattern":"p","severity":"block","message":"m","category":"git"}"#;
+        let json =
+            r#"{"name":"min","pattern":"p","severity":"block","message":"m","category":"git"}"#;
         let rule: Rule = serde_json::from_str(json).unwrap();
         assert!(rule.test_block.is_none());
         assert!(rule.test_allow.is_none());
@@ -584,7 +657,10 @@ mod tests {
             .severity(Severity::Block)
             .message("Recursive force-delete from root")
             .build();
-        assert_eq!(rule.to_string(), "[block] rm-rf-root: Recursive force-delete from root");
+        assert_eq!(
+            rule.to_string(),
+            "[block] rm-rf-root: Recursive force-delete from root"
+        );
     }
 
     #[test]
@@ -651,7 +727,9 @@ mod tests {
         let mut config = GuardrailConfig::default();
         config.categories.insert(Category::Git, false);
         config.disabled_rules.push("rm-rf-root".into());
-        config.extra_rules.push(Rule::builder("custom", "pat").build());
+        config
+            .extra_rules
+            .push(Rule::builder("custom", "pat").build());
 
         let yaml = serde_yaml::to_string(&config).unwrap();
         let back: GuardrailConfig = serde_yaml::from_str(&yaml).unwrap();
@@ -727,7 +805,10 @@ extraRules: []
   category: git
 "#;
         let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
-        assert!(result.is_err(), "invalid severity should fail deserialization");
+        assert!(
+            result.is_err(),
+            "invalid severity should fail deserialization"
+        );
     }
 
     #[test]
@@ -740,7 +821,10 @@ extraRules: []
   category: nonexistent
 "#;
         let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
-        assert!(result.is_err(), "invalid category should fail deserialization");
+        assert!(
+            result.is_err(),
+            "invalid category should fail deserialization"
+        );
     }
 
     #[test]

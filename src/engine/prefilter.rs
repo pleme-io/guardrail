@@ -6,23 +6,51 @@ use hayai::engine::{Prefilter, contains_ascii_ci};
 /// First-word prefixes that COULD trigger a rule.
 const DANGEROUS_PREFIXES: &[&str] = &[
     // filesystem
-    "rm", "dd", "mkfs", "chmod", "chown", "mv", "truncate", "shred",
+    "rm",
+    "dd",
+    "mkfs",
+    "chmod",
+    "chown",
+    "mv",
+    "truncate",
+    "shred",
     // git
     "git",
     // database / SQL
-    "psql", "mysql", "sqlite3", "sqlcmd", "sqlx", "diesel", "prisma",
-    "liquibase", "flyway", "knex", "rails", "rake", "python", "django-admin",
-    "mongosh", "mongo",
+    "psql",
+    "mysql",
+    "sqlite3",
+    "sqlcmd",
+    "sqlx",
+    "diesel",
+    "prisma",
+    "liquibase",
+    "flyway",
+    "knex",
+    "rails",
+    "rake",
+    "python",
+    "django-admin",
+    "mongosh",
+    "mongo",
     // kubernetes
-    "kubectl", "helm", "flux",
+    "kubectl",
+    "helm",
+    "flux",
     // cloud
-    "aws", "gcloud", "gsutil", "az", "bq",
+    "aws",
+    "gcloud",
+    "gsutil",
+    "az",
+    "bq",
     // nix
-    "nix", "nix-collect-garbage",
+    "nix",
+    "nix-collect-garbage",
     // docker
     "docker",
     // secrets
-    "sops", "echo",
+    "sops",
+    "echo",
     // terraform / iac
     //
     // `tofu` is the OpenTofu binary — a drop-in successor to `terraform` and
@@ -30,13 +58,18 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     // prefilter fast-rejects before the DFA runs, so ANY `tofu` rule — existing
     // or future — never reached the engine at all. A rule that cannot be
     // reached is a guard over zero subjects.
-    "terraform", "tofu", "pulumi", "ansible-playbook",
+    "terraform",
+    "tofu",
+    "pulumi",
+    "ansible-playbook",
     // stream editors
     //
     // In-place edits (`sed -i`, `perl -i`) of a file that stays are the class
     // this covers: the editor cannot see the file's grammar, so it can leave
     // something that still parses but means something else.
-    "sed", "perl", "awk",
+    "sed",
+    "perl",
+    "awk",
     // scratch interpreters used as editing tools
     //
     // The sibling shape of the stream editors above, and where the reflex goes
@@ -47,33 +80,65 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     // all — the same unreachability recorded above for `tofu`. Caught by that
     // rule's own test, which is the argument for pairing every new rule with a
     // must-fire case rather than eyeballing the pattern.
-    "ruby", "node",
+    "ruby",
+    "node",
     // akeyless
-    "akeyless", "aky",
+    "akeyless",
+    "aky",
     // process
-    "kill", "killall", "pkill", "shutdown", "poweroff", "halt", "reboot",
-    "systemctl", "launchctl",
+    "kill",
+    "killall",
+    "pkill",
+    "shutdown",
+    "poweroff",
+    "halt",
+    "reboot",
+    "systemctl",
+    "launchctl",
     // network
-    "iptables", "ufw", "ip", "nft",
+    "iptables",
+    "ufw",
+    "ip",
+    "nft",
     // nosql
     "redis-cli",
     // curl/wget (pipe install, elasticsearch)
-    "curl", "wget",
+    "curl",
+    "wget",
     // mysql admin
     "mysqladmin",
     // shell wrappers -- commands that execute other commands
-    "sh", "bash", "zsh", "fish", "dash",
-    "env", "sudo", "doas", "nohup", "nice", "timeout",
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "dash",
+    "env",
+    "sudo",
+    "doas",
+    "nohup",
+    "nice",
+    "timeout",
     // eval / indirect execution
-    "eval", "xargs", "find",
+    "eval",
+    "xargs",
+    "find",
     // scheduling
-    "crontab", "at",
+    "crontab",
+    "at",
     // disk partitioning
-    "fdisk", "parted", "wipefs",
+    "fdisk",
+    "parted",
+    "wipefs",
     // sync/publish (supply chain)
-    "npm", "cargo", "gem", "pip", "twine",
+    "npm",
+    "cargo",
+    "gem",
+    "pip",
+    "twine",
     // remote sync
-    "rsync", "rclone",
+    "rsync",
+    "rclone",
     // log wiping
     "journalctl",
     // ssh (remote command execution)
@@ -101,7 +166,8 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     // Spaces-swipe animations with identical declared config (2026-09-21).
     // Both spellings: `starts_with` never sees `defaults` inside the
     // absolute path.
-    "defaults", "/usr/bin/defaults",
+    "defaults",
+    "/usr/bin/defaults",
 ];
 
 static PREFIX_SET: LazyLock<HashSet<&'static str>> =
@@ -109,9 +175,16 @@ static PREFIX_SET: LazyLock<HashSet<&'static str>> =
 
 /// SQL keywords checked in a zero-alloc byte-level scan.
 const SQL_KEYWORDS: &[&[u8]] = &[
-    b"DROP ", b"TRUNCATE ", b"DELETE FROM", b"REVOKE ",
-    b"FLUSHALL", b"FLUSHDB", b"VACUUM FULL",
-    b"BASE64", b"| BASH", b"| SH",
+    b"DROP ",
+    b"TRUNCATE ",
+    b"DELETE FROM",
+    b"REVOKE ",
+    b"FLUSHALL",
+    b"FLUSHDB",
+    b"VACUUM FULL",
+    b"BASE64",
+    b"| BASH",
+    b"| SH",
 ];
 
 /// Production prefilter: skips DFA for commands whose first 3 words

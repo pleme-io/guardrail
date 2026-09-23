@@ -4,15 +4,18 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 use guardrail::cache::{self, FsCache, FsFingerprinter, HayaiError};
-use guardrail::{CacheStore, Fingerprinter};
 use guardrail::config::{self, DefaultsProvider, DirectoryProvider, RuleProvider};
 use guardrail::hook::ScanContext;
 use guardrail::journal::{self, WriteJournal};
 use guardrail::model::{Decision, Rule};
-use guardrail::{engine::RegexEngine, hook, RuleEngine};
+use guardrail::{CacheStore, Fingerprinter};
+use guardrail::{RuleEngine, engine::RegexEngine, hook};
 
 #[derive(Parser)]
-#[command(name = "guardrail", about = "Defensive guardrails for AI coding agents")]
+#[command(
+    name = "guardrail",
+    about = "Defensive guardrails for AI coding agents"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -32,10 +35,15 @@ enum Command {
     SearchAdvise,
     /// PreToolUse nudge for Grep|Glob (advisory-only; never denies — yet).
     SearchNudge,
+    /// PostToolUse advice for Bash|Write: a new primitive is being MINTED,
+    /// so route the name through /naming before it sets.
+    MintAdvise,
 }
 
 fn fs_cache() -> FsCache {
-    FsCache { path: FsCache::default_path() }
+    FsCache {
+        path: FsCache::default_path(),
+    }
 }
 
 fn fs_fingerprinter() -> FsFingerprinter {
@@ -47,14 +55,20 @@ fn fs_fingerprinter() -> FsFingerprinter {
 
 fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
     let defaults = DefaultsProvider;
-    let rules_d = DirectoryProvider { dir: config::rules_dir() };
+    let rules_d = DirectoryProvider {
+        dir: config::rules_dir(),
+    };
     let user_config = config::load_user_config(&config::config_path())
         .context("loading guardrail config")
-        .map_err(|e| HayaiError::Io { source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()) })?;
+        .map_err(|e| HayaiError::Io {
+            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+        })?;
     let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
     config::resolve(&providers, &user_config)
         .context("resolving rules")
-        .map_err(|e| HayaiError::Io { source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()) })
+        .map_err(|e| HayaiError::Io {
+            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+        })
 }
 
 fn build_engine() -> Result<RegexEngine> {
@@ -71,6 +85,7 @@ fn main() -> Result<()> {
         Command::List => cmd_list(),
         Command::SearchAdvise => cmd_search_advise(),
         Command::SearchNudge => cmd_search_nudge(),
+        Command::MintAdvise => cmd_mint_advise(),
     }
 }
 
@@ -166,7 +181,11 @@ fn record_write_journal(
     if !has_content_scan {
         return;
     }
-    let Some(fp) = input.tool_input.as_ref().and_then(|ti| ti.file_path.as_deref()) else {
+    let Some(fp) = input
+        .tool_input
+        .as_ref()
+        .and_then(|ti| ti.file_path.as_deref())
+    else {
         return;
     };
     let mut journal = WriteJournal::load();
@@ -193,6 +212,123 @@ fn emit_block(rule: &str, message: &str) -> ! {
     });
     println!("{response}");
     process::exit(1);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Mint nudge — a new primitive is being born; route it through /naming
+// ═══════════════════════════════════════════════════════════════════
+//
+// ── WHY THIS EXISTS (measured 2026-09-23)
+//
+// An agent scaffolded a new fleet tool — new directory under the org root,
+// new Cargo.toml, new flake.nix — and named it with an ad-hoc `rg` sweep
+// instead of `/naming`, even though the `naming` skill WAS deployed, its
+// description already says it triggers when "minting any new crate / repo /
+// doctrine / primitive", and a research pass in the same session had just
+// told the agent "Canonical law: theory/NAMING.md. Procedure: the naming
+// skill." Every advisory surface was correct and present; none of them fired
+// at the moment the name was chosen.
+//
+// That is the whole argument for putting this in a HOOK rather than in more
+// prose: the failure was not missing knowledge, it was knowledge that did not
+// arrive at the decision point. A hook rides the tool call that mints the
+// thing, which is exactly that point.
+//
+// ── WHAT COUNTS AS MINTING
+//
+// Creating a REPO ROOT under the org root — one path segment past
+// `code/github/pleme-io` — or writing a repo-defining file into one. Work
+// *inside* an existing repo is not minting and must stay silent, or the nudge
+// becomes noise and gets ignored, which is how a gate dies.
+//
+// ADVISORY ONLY. It never blocks: naming is a judgement, and a hook that
+// refuses to let you create a directory would be worse than the miss it is
+// correcting.
+
+/// The message injected when a mint is detected.
+///
+/// Names the three things the law actually requires, because "run /naming"
+/// alone would send a reader to a procedure they then have to summarise. The
+/// registration list is the part that gets skipped.
+const MINT_NUDGE_MSG: &str = "That call is MINTING a new pleme-io primitive (a repo root under the org root, or a repo-defining file in one). Run /naming before the name sets: theory/NAMING.md Law 1 selects the language (Japanese for foundational substrate/tools/discipline, Brazilian-Portuguese for Tier-2+ places/flows/craft), Law 2 requires the literal gloss to teach the thing, Law 3 draws from a registered metaphor family. Law 4 is the one that keeps failing — sweep for collisions with `--no-ignore` (the org root is itself a git repo with `.gitignore = *`, so a bare rg reads ~6 files, not ~992 repos) and use a positive control to prove the sweep is not vacuously empty. Then register the name in theory/VOCABULARY.md, theory/NAMING.md's family table, repo-forge/repos.lisp, and pangea-architectures' org.yaml — a name that exists in only some of those is how a primitive gets minted by implication.";
+
+/// The org root, as it appears in a path. Matched as a substring so `~`,
+/// `$HOME` and an absolute `/Users/<who>` all hit.
+const ORG_ROOT: &str = "code/github/pleme-io/";
+
+/// Does `path` name a REPO ROOT under the org root — exactly one segment past
+/// it — rather than something inside an existing repo?
+///
+/// `…/pleme-io/tsunagari` mints. `…/pleme-io/nix/modules/foo` does not: it is
+/// work inside a repo that already has a name.
+fn is_repo_root_path(path: &str) -> bool {
+    let Some(idx) = path.find(ORG_ROOT) else {
+        return false;
+    };
+    let tail = &path[idx + ORG_ROOT.len()..];
+    let tail = tail.trim_end_matches('/');
+    !tail.is_empty() && !tail.contains('/')
+}
+
+/// A repo-defining file: writing one into a repo root is minting even when the
+/// directory already exists.
+fn is_repo_defining_file(path: &str) -> bool {
+    let Some(idx) = path.find(ORG_ROOT) else {
+        return false;
+    };
+    let tail = path[idx + ORG_ROOT.len()..].trim_end_matches('/');
+    let mut parts = tail.split('/');
+    let (Some(repo), Some(file), None) = (parts.next(), parts.next(), parts.next()) else {
+        return false;
+    };
+    !repo.is_empty() && matches!(file, "Cargo.toml" | "flake.nix")
+}
+
+/// Whether this tool call is minting a new primitive.
+///
+/// Deliberately narrow. A false positive on every `mkdir` would train the
+/// reader to skip the message, and an ignored nudge is worth less than none.
+fn is_minting(tool_name: Option<&str>, input: &hook::ToolInput) -> bool {
+    match tool_name {
+        Some("Bash") => {
+            let Some(cmd) = input.command.as_deref() else {
+                return false;
+            };
+            let creates =
+                cmd.contains("mkdir") || cmd.contains("git init") || cmd.contains("cargo new");
+            creates
+                && cmd
+                    .split_whitespace()
+                    .any(|tok| is_repo_root_path(tok.trim_matches('"').trim_matches('\'')))
+        }
+        Some("Write") => input
+            .file_path
+            .as_deref()
+            .is_some_and(is_repo_defining_file),
+        _ => false,
+    }
+}
+
+/// `PostToolUse` hook for Bash|Write. Emits the naming reminder when the call
+/// minted something, and nothing otherwise. Always exits 0.
+fn cmd_mint_advise() -> Result<()> {
+    let Ok(input) = hook::parse_stdin() else {
+        return Ok(());
+    };
+    let Some(tool_input) = &input.tool_input else {
+        return Ok(());
+    };
+    if !is_minting(input.tool_name.as_deref(), tool_input) {
+        return Ok(());
+    }
+    let response = serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": MINT_NUDGE_MSG,
+        }
+    });
+    println!("{response}");
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -312,7 +448,11 @@ fn cmd_compile() -> Result<()> {
     let fp = fs_fingerprinter().fingerprint();
     store.save(fp, &rules)?;
 
-    eprintln!("guardrail: compiled {} rules -> {}", engine.rule_count(), store.path.display());
+    eprintln!(
+        "guardrail: compiled {} rules -> {}",
+        engine.rule_count(),
+        store.path.display()
+    );
     Ok(())
 }
 
@@ -331,9 +471,121 @@ fn cmd_validate() -> Result<()> {
 fn cmd_list() -> Result<()> {
     let engine = build_engine()?;
     for rule in engine.rules() {
-        let sev = if rule.severity.is_blocking() { "BLOCK" } else { "WARN " };
-        eprintln!("[{sev}] {:<30} {}  {}", rule.name, rule.category, rule.message);
+        let sev = if rule.severity.is_blocking() {
+            "BLOCK"
+        } else {
+            "WARN "
+        };
+        eprintln!(
+            "[{sev}] {:<30} {}  {}",
+            rule.name, rule.category, rule.message
+        );
     }
     eprintln!("\n{} rules active", engine.rule_count());
     Ok(())
+}
+
+#[cfg(test)]
+mod mint_tests {
+    use super::*;
+
+    fn bash(cmd: &str) -> hook::ToolInput {
+        hook::ToolInput {
+            command: Some(cmd.to_string()),
+            ..Default::default()
+        }
+    }
+    fn write(path: &str) -> hook::ToolInput {
+        hook::ToolInput {
+            file_path: Some(path.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_repo_root_is_one_segment_past_the_org_root() {
+        assert!(is_repo_root_path("/Users/x/code/github/pleme-io/tsunagari"));
+        assert!(is_repo_root_path("~/code/github/pleme-io/tsunagari/"));
+        // Inside an existing repo is NOT minting — this is the false positive
+        // that would make the nudge noise and get it ignored.
+        assert!(!is_repo_root_path(
+            "/Users/x/code/github/pleme-io/nix/modules/foo"
+        ));
+        assert!(!is_repo_root_path("/tmp/scratch/thing"));
+        assert!(!is_repo_root_path("/Users/x/code/github/pleme-io/"));
+    }
+
+    #[test]
+    fn creating_a_repo_root_mints() {
+        assert!(
+            is_minting(
+                Some("Bash"),
+                &bash("mkdir -p ~/code/github/pleme-io/tsunagari/src").clone()
+            ) == false,
+            "a path two deep is not a repo root"
+        );
+        assert!(is_minting(
+            Some("Bash"),
+            &bash("mkdir -p ~/code/github/pleme-io/tsunagari")
+        ));
+        assert!(is_minting(
+            Some("Bash"),
+            &bash("cd ~/code/github/pleme-io/tsunagari && git init -q")
+        ));
+    }
+
+    #[test]
+    fn ordinary_work_is_silent() {
+        assert!(!is_minting(
+            Some("Bash"),
+            &bash("ls ~/code/github/pleme-io/nix")
+        ));
+        assert!(!is_minting(Some("Bash"), &bash("mkdir -p /tmp/scratch")));
+        assert!(!is_minting(
+            Some("Bash"),
+            &bash("mkdir -p ~/code/github/pleme-io/nix/parts")
+        ));
+        assert!(!is_minting(
+            Some("Grep"),
+            &bash("mkdir -p ~/code/github/pleme-io/x")
+        ));
+    }
+
+    #[test]
+    fn a_repo_defining_file_mints_even_when_the_dir_exists() {
+        assert!(is_minting(
+            Some("Write"),
+            &write("/Users/x/code/github/pleme-io/tsunagari/Cargo.toml")
+        ));
+        assert!(is_minting(
+            Some("Write"),
+            &write("/Users/x/code/github/pleme-io/tsunagari/flake.nix")
+        ));
+        // A Cargo.toml deeper in a workspace is ordinary work.
+        assert!(!is_minting(
+            Some("Write"),
+            &write("/Users/x/code/github/pleme-io/nix/crates/a/Cargo.toml")
+        ));
+        assert!(!is_minting(
+            Some("Write"),
+            &write("/Users/x/code/github/pleme-io/tsunagari/src/main.rs")
+        ));
+    }
+
+    #[test]
+    fn the_message_names_the_registration_surfaces() {
+        // The registration list is the part that gets skipped, so it is the
+        // part the message must carry.
+        for surface in [
+            "VOCABULARY.md",
+            "repo-forge/repos.lisp",
+            "org.yaml",
+            "--no-ignore",
+        ] {
+            assert!(
+                MINT_NUDGE_MSG.contains(surface),
+                "message must name {surface}"
+            );
+        }
+    }
 }

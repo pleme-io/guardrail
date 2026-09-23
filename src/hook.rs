@@ -10,7 +10,7 @@ pub struct HookInput {
 }
 
 /// Tool input fields — captures Bash, Write, Edit, `NotebookEdit`, and MCP tools.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct ToolInput {
     /// Bash command string.
     pub command: Option<String>,
@@ -242,7 +242,7 @@ pub fn parse_stdin() -> anyhow::Result<HookInput> {
 /// might be dangerous) are returned.
 #[must_use]
 pub fn scan_content_lines(content: &str) -> Vec<String> {
-    use crate::engine::{PrefixPrefilter, Prefilter};
+    use crate::engine::{Prefilter, PrefixPrefilter};
     let prefilter = PrefixPrefilter;
     content
         .lines()
@@ -457,9 +457,7 @@ mod tests {
             }
             fields.push_str(&format!(r#""field_{i}": "value_{i}""#));
         }
-        let json = format!(
-            r#"{{"tool_name": "mcp__test__tool", "tool_input": {{{fields}}}}}"#
-        );
+        let json = format!(r#"{{"tool_name": "mcp__test__tool", "tool_input": {{{fields}}}}}"#);
         let input = parse_reader(json.as_bytes()).unwrap();
         let items = extract_scannable_content(&input);
         assert!(
@@ -494,11 +492,14 @@ mod tests {
     #[test]
     fn mcp_with_command_field() {
         // MCP tool where `command` is a known field (not just in `extra`)
-        let json = r#"{"tool_name": "mcp__k8s__exec", "tool_input": {"command": "kubectl get pods"}}"#;
+        let json =
+            r#"{"tool_name": "mcp__k8s__exec", "tool_input": {"command": "kubectl get pods"}}"#;
         let input = parse_reader(json.as_bytes()).unwrap();
         let items = extract_scannable_content(&input);
         assert!(
-            items.iter().any(|i| i.text == "kubectl get pods" && i.context == ScanContext::McpCommand),
+            items
+                .iter()
+                .any(|i| i.text == "kubectl get pods" && i.context == ScanContext::McpCommand),
             "command field should be extracted for MCP tools"
         );
     }

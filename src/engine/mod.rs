@@ -3,11 +3,11 @@ mod sql;
 
 use std::fmt;
 
+use hayai::engine::RegexMatcher;
 pub use hayai::engine::{
     ChainedNormalizer, IdentityNormalizer, MatchEngine, Normalizer, NullPrefilter, PathNormalizer,
     Prefilter, contains_ascii_ci,
 };
-use hayai::engine::RegexMatcher;
 
 pub use self::prefilter::PrefixPrefilter;
 pub use self::sql::SqlCommentStripper;
@@ -274,7 +274,10 @@ mod tests {
 
     #[test]
     fn chained_normalizer_chains_path_and_sql() {
-        let n = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let n = ChainedNormalizer {
+            first: PathNormalizer,
+            second: SqlCommentStripper,
+        };
         let result = n.normalize("/usr/bin/psql -c 'DROP/**/TABLE users'");
         assert!(result.contains("DROP"));
         assert!(result.contains("TABLE"));
@@ -283,21 +286,30 @@ mod tests {
 
     #[test]
     fn chained_normalizer_borrows_when_clean() {
-        let n: ProductionNormalizer = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let n: ProductionNormalizer = ChainedNormalizer {
+            first: PathNormalizer,
+            second: SqlCommentStripper,
+        };
         let result = n.normalize("cargo test");
         assert!(matches!(result, Cow::Borrowed(_)));
     }
 
     #[test]
     fn chained_normalizer_only_first_transforms() {
-        let n = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let n = ChainedNormalizer {
+            first: PathNormalizer,
+            second: SqlCommentStripper,
+        };
         let result = n.normalize("/usr/bin/ls -la");
         assert_eq!(&*result, "ls -la");
     }
 
     #[test]
     fn chained_normalizer_only_second_transforms() {
-        let n = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
+        let n = ChainedNormalizer {
+            first: PathNormalizer,
+            second: SqlCommentStripper,
+        };
         let result = n.normalize("DROP/**/TABLE users");
         assert!(result.contains("DROP"));
         assert!(result.contains("TABLE"));
@@ -305,7 +317,10 @@ mod tests {
 
     #[test]
     fn chained_normalizer_identity_is_noop() {
-        let n = ChainedNormalizer { first: IdentityNormalizer, second: IdentityNormalizer };
+        let n = ChainedNormalizer {
+            first: IdentityNormalizer,
+            second: IdentityNormalizer,
+        };
         let result = n.normalize("anything");
         assert!(matches!(result, Cow::Borrowed("anything")));
     }
@@ -349,9 +364,11 @@ mod tests {
     #[test]
     fn engine_with_null_prefilter_checks_everything() {
         let rules = config::default_rules();
-        let normalizer = ChainedNormalizer { first: PathNormalizer, second: SqlCommentStripper };
-        let engine =
-            RegexEngine::with_plugins(rules, normalizer, NullPrefilter).unwrap();
+        let normalizer = ChainedNormalizer {
+            first: PathNormalizer,
+            second: SqlCommentStripper,
+        };
+        let engine = RegexEngine::with_plugins(rules, normalizer, NullPrefilter).unwrap();
         assert!(matches!(engine.check("ls -la"), Decision::Allow));
         assert!(matches!(engine.check("rm -rf /"), Decision::Block { .. }));
     }
@@ -359,8 +376,7 @@ mod tests {
     #[test]
     fn engine_with_identity_normalizer_no_nix_strip() {
         let rules = config::default_rules();
-        let engine =
-            RegexEngine::with_plugins(rules, IdentityNormalizer, PrefixPrefilter).unwrap();
+        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, PrefixPrefilter).unwrap();
         assert!(matches!(
             engine.check("/nix/store/abc123-coreutils-9.0/bin/rm -rf /"),
             Decision::Allow
@@ -416,112 +432,340 @@ mod tests {
 
     // -- Filesystem -----------------------------------------------
 
-    #[test] fn rm_rf_root_blocked()        { assert_blocks("rm -rf /"); }
-    #[test] fn rm_rf_root_var_blocked()    { assert_blocks("rm -rf /"); }
-    #[test] fn rm_rf_home_blocked()        { assert_blocks("rm -rf ~"); }
-    #[test] fn rm_rf_home_var_blocked()    { assert_blocks("rm -rf $HOME"); }
-    #[test] fn rm_rf_cwd_blocked()         { assert_blocks("rm -rf ."); }
-    #[test] fn rm_rf_target_allowed()      { assert_allows("rm -rf ./target"); }
-    #[test] fn rm_rf_subdir_allowed()      { assert_allows("rm -rf ~/code/old-project"); }
-    #[test] fn rm_single_file_allowed()    { assert_allows("rm file.txt"); }
-    #[test] fn dd_disk_blocked()           { assert_blocks("dd if=/dev/zero of=/dev/sda bs=1M"); }
-    #[test] fn dd_file_allowed()           { assert_allows("dd if=input.img of=output.img"); }
-    #[test] fn mkfs_blocked()              { assert_blocks("mkfs.ext4 /dev/sda1"); }
+    #[test]
+    fn rm_rf_root_blocked() {
+        assert_blocks("rm -rf /");
+    }
+    #[test]
+    fn rm_rf_root_var_blocked() {
+        assert_blocks("rm -rf /");
+    }
+    #[test]
+    fn rm_rf_home_blocked() {
+        assert_blocks("rm -rf ~");
+    }
+    #[test]
+    fn rm_rf_home_var_blocked() {
+        assert_blocks("rm -rf $HOME");
+    }
+    #[test]
+    fn rm_rf_cwd_blocked() {
+        assert_blocks("rm -rf .");
+    }
+    #[test]
+    fn rm_rf_target_allowed() {
+        assert_allows("rm -rf ./target");
+    }
+    #[test]
+    fn rm_rf_subdir_allowed() {
+        assert_allows("rm -rf ~/code/old-project");
+    }
+    #[test]
+    fn rm_single_file_allowed() {
+        assert_allows("rm file.txt");
+    }
+    #[test]
+    fn dd_disk_blocked() {
+        assert_blocks("dd if=/dev/zero of=/dev/sda bs=1M");
+    }
+    #[test]
+    fn dd_file_allowed() {
+        assert_allows("dd if=input.img of=output.img");
+    }
+    #[test]
+    fn mkfs_blocked() {
+        assert_blocks("mkfs.ext4 /dev/sda1");
+    }
 
     // -- Git ------------------------------------------------------
 
-    #[test] fn force_push_main_blocked()     { assert_blocks("git push --force origin main"); }
-    #[test] fn force_push_master_blocked()   { assert_blocks("git push --force origin master"); }
-    #[test] fn force_push_bare_blocked()     { assert_blocks("git push --force"); }
-    #[test] fn force_push_feature_allowed()  { assert_allows("git push --force origin feature-xyz"); }
-    #[test] fn normal_push_allowed()         { assert_allows("git push origin main"); }
-    #[test] fn reset_hard_warned()           { assert_warns("git reset --hard HEAD~1"); }
-    #[test] fn reset_soft_allowed()          { assert_allows("git reset --soft HEAD~1"); }
-    #[test] fn clean_force_warned()          { assert_warns("git clean -fd"); }
-    #[test] fn branch_force_delete_warned()  { assert_warns("git branch -D old-branch"); }
-    #[test] fn branch_delete_allowed()       { assert_allows("git branch -d merged-branch"); }
+    #[test]
+    fn force_push_main_blocked() {
+        assert_blocks("git push --force origin main");
+    }
+    #[test]
+    fn force_push_master_blocked() {
+        assert_blocks("git push --force origin master");
+    }
+    #[test]
+    fn force_push_bare_blocked() {
+        assert_blocks("git push --force");
+    }
+    #[test]
+    fn force_push_feature_allowed() {
+        assert_allows("git push --force origin feature-xyz");
+    }
+    #[test]
+    fn normal_push_allowed() {
+        assert_allows("git push origin main");
+    }
+    #[test]
+    fn reset_hard_warned() {
+        assert_warns("git reset --hard HEAD~1");
+    }
+    #[test]
+    fn reset_soft_allowed() {
+        assert_allows("git reset --soft HEAD~1");
+    }
+    #[test]
+    fn clean_force_warned() {
+        assert_warns("git clean -fd");
+    }
+    #[test]
+    fn branch_force_delete_warned() {
+        assert_warns("git branch -D old-branch");
+    }
+    #[test]
+    fn branch_delete_allowed() {
+        assert_allows("git branch -d merged-branch");
+    }
 
     // -- Database -------------------------------------------------
 
-    #[test] fn drop_table_blocked()            { assert_blocks("psql -c 'DROP TABLE users'"); }
-    #[test] fn drop_table_lower_blocked()      { assert_blocks("psql -c 'drop table users'"); }
-    #[test] fn drop_database_blocked()         { assert_blocks("psql -c 'DROP DATABASE mydb'"); }
-    #[test] fn drop_schema_blocked()           { assert_blocks("mysql -e 'DROP SCHEMA test'"); }
-    #[test] fn truncate_blocked()              { assert_blocks("psql -c 'TRUNCATE TABLE logs'"); }
-    #[test] fn delete_no_where_blocked()       { assert_blocks("psql -c 'DELETE FROM users'"); }
-    #[test] fn delete_with_where_allowed()     { assert_allows("psql -c 'DELETE FROM users WHERE id = 5'"); }
-    #[test] fn select_allowed()                { assert_allows("psql -c 'SELECT * FROM users'"); }
-    #[test] fn create_table_allowed()          { assert_allows("psql -c 'CREATE TABLE new_table (id int)'"); }
-    #[test] fn insert_allowed()                { assert_allows("psql -c 'INSERT INTO users VALUES (1)'"); }
+    #[test]
+    fn drop_table_blocked() {
+        assert_blocks("psql -c 'DROP TABLE users'");
+    }
+    #[test]
+    fn drop_table_lower_blocked() {
+        assert_blocks("psql -c 'drop table users'");
+    }
+    #[test]
+    fn drop_database_blocked() {
+        assert_blocks("psql -c 'DROP DATABASE mydb'");
+    }
+    #[test]
+    fn drop_schema_blocked() {
+        assert_blocks("mysql -e 'DROP SCHEMA test'");
+    }
+    #[test]
+    fn truncate_blocked() {
+        assert_blocks("psql -c 'TRUNCATE TABLE logs'");
+    }
+    #[test]
+    fn delete_no_where_blocked() {
+        assert_blocks("psql -c 'DELETE FROM users'");
+    }
+    #[test]
+    fn delete_with_where_allowed() {
+        assert_allows("psql -c 'DELETE FROM users WHERE id = 5'");
+    }
+    #[test]
+    fn select_allowed() {
+        assert_allows("psql -c 'SELECT * FROM users'");
+    }
+    #[test]
+    fn create_table_allowed() {
+        assert_allows("psql -c 'CREATE TABLE new_table (id int)'");
+    }
+    #[test]
+    fn insert_allowed() {
+        assert_allows("psql -c 'INSERT INTO users VALUES (1)'");
+    }
 
     // -- SQL escaping ---------------------------------------------
 
-    #[test] fn drop_table_single_quotes()  { assert_blocks("psql -c 'DROP TABLE users'"); }
-    #[test] fn drop_table_double_quotes()  { assert_blocks(r#"psql -c "DROP TABLE users""#); }
-    #[test] fn drop_table_heredoc()        { assert_blocks("psql <<EOF\nDROP TABLE users;\nEOF"); }
-    #[test] fn drop_table_pipe()           { assert_blocks("echo 'DROP TABLE users' | psql"); }
-    #[test] fn drop_table_e_flag()         { assert_blocks("mysql -e 'DROP TABLE users'"); }
-    #[test] fn drop_table_multiline()      { assert_blocks("psql -c '\nDROP TABLE\nusers\n'"); }
-    #[test] fn truncate_semicolon()        { assert_blocks("psql -c 'TRUNCATE TABLE logs;'"); }
-    #[test] fn delete_from_semicolon()     { assert_blocks("psql -c 'DELETE FROM users;'"); }
+    #[test]
+    fn drop_table_single_quotes() {
+        assert_blocks("psql -c 'DROP TABLE users'");
+    }
+    #[test]
+    fn drop_table_double_quotes() {
+        assert_blocks(r#"psql -c "DROP TABLE users""#);
+    }
+    #[test]
+    fn drop_table_heredoc() {
+        assert_blocks("psql <<EOF\nDROP TABLE users;\nEOF");
+    }
+    #[test]
+    fn drop_table_pipe() {
+        assert_blocks("echo 'DROP TABLE users' | psql");
+    }
+    #[test]
+    fn drop_table_e_flag() {
+        assert_blocks("mysql -e 'DROP TABLE users'");
+    }
+    #[test]
+    fn drop_table_multiline() {
+        assert_blocks("psql -c '\nDROP TABLE\nusers\n'");
+    }
+    #[test]
+    fn truncate_semicolon() {
+        assert_blocks("psql -c 'TRUNCATE TABLE logs;'");
+    }
+    #[test]
+    fn delete_from_semicolon() {
+        assert_blocks("psql -c 'DELETE FROM users;'");
+    }
 
     // -- SQL comment bypass blocked -------------------------------
 
-    #[test] fn drop_table_block_comment()  { assert_blocks("psql -c 'DROP/**/TABLE users'"); }
-    #[test] fn drop_sneaky_comment()       { assert_blocks("psql -c 'DROP/* sneaky */TABLE users'"); }
-    #[test] fn delete_block_comment()      { assert_blocks("psql -c 'DELETE/**/FROM users'"); }
-    #[test] fn select_star_not_blocked()   { assert_allows("psql -c 'SELECT * FROM users'"); }
-    #[test] fn create_not_blocked()        { assert_allows("psql -c 'CREATE TABLE t (id int)'"); }
-    #[test] fn alter_add_col_allowed()     { assert_allows("psql -c 'ALTER TABLE t ADD COLUMN name text'"); }
+    #[test]
+    fn drop_table_block_comment() {
+        assert_blocks("psql -c 'DROP/**/TABLE users'");
+    }
+    #[test]
+    fn drop_sneaky_comment() {
+        assert_blocks("psql -c 'DROP/* sneaky */TABLE users'");
+    }
+    #[test]
+    fn delete_block_comment() {
+        assert_blocks("psql -c 'DELETE/**/FROM users'");
+    }
+    #[test]
+    fn select_star_not_blocked() {
+        assert_allows("psql -c 'SELECT * FROM users'");
+    }
+    #[test]
+    fn create_not_blocked() {
+        assert_allows("psql -c 'CREATE TABLE t (id int)'");
+    }
+    #[test]
+    fn alter_add_col_allowed() {
+        assert_allows("psql -c 'ALTER TABLE t ADD COLUMN name text'");
+    }
 
     // -- Kubernetes -----------------------------------------------
 
-    #[test] fn kubectl_delete_ns_blocked()     { assert_blocks("kubectl delete namespace production"); }
-    #[test] fn kubectl_delete_ns_short()       { assert_blocks("kubectl delete ns staging"); }
-    #[test] fn kubectl_delete_all_blocked()    { assert_blocks("kubectl delete pods --all"); }
-    #[test] fn kubectl_delete_pod_allowed()    { assert_allows("kubectl delete pod stuck-pod -n staging"); }
-    #[test] fn kubectl_get_allowed()           { assert_allows("kubectl get pods -n production"); }
-    #[test] fn helm_uninstall_prod_blocked()   { assert_blocks("helm uninstall myapp -n production"); }
-    #[test] fn helm_uninstall_staging_allowed() { assert_allows("helm uninstall myapp -n staging"); }
+    #[test]
+    fn kubectl_delete_ns_blocked() {
+        assert_blocks("kubectl delete namespace production");
+    }
+    #[test]
+    fn kubectl_delete_ns_short() {
+        assert_blocks("kubectl delete ns staging");
+    }
+    #[test]
+    fn kubectl_delete_all_blocked() {
+        assert_blocks("kubectl delete pods --all");
+    }
+    #[test]
+    fn kubectl_delete_pod_allowed() {
+        assert_allows("kubectl delete pod stuck-pod -n staging");
+    }
+    #[test]
+    fn kubectl_get_allowed() {
+        assert_allows("kubectl get pods -n production");
+    }
+    #[test]
+    fn helm_uninstall_prod_blocked() {
+        assert_blocks("helm uninstall myapp -n production");
+    }
+    #[test]
+    fn helm_uninstall_staging_allowed() {
+        assert_allows("helm uninstall myapp -n staging");
+    }
 
     // -- Nix ------------------------------------------------------
 
-    #[test] fn nix_gc_delete_warned()    { assert_warns("nix-collect-garbage -d"); }
-    #[test] fn nix_store_gc_warned()     { assert_warns("nix store gc"); }
-    #[test] fn nix_build_allowed()       { assert_allows("nix build .#default"); }
+    #[test]
+    fn nix_gc_delete_warned() {
+        assert_warns("nix-collect-garbage -d");
+    }
+    #[test]
+    fn nix_store_gc_warned() {
+        assert_warns("nix store gc");
+    }
+    #[test]
+    fn nix_build_allowed() {
+        assert_allows("nix build .#default");
+    }
 
     // -- Docker ---------------------------------------------------
 
-    #[test] fn docker_system_prune_warned()  { assert_warns("docker system prune -af"); }
-    #[test] fn docker_volume_prune_warned()  { assert_warns("docker volume prune -f"); }
-    #[test] fn docker_build_allowed()        { assert_allows("docker build -t myimage ."); }
+    #[test]
+    fn docker_system_prune_warned() {
+        assert_warns("docker system prune -af");
+    }
+    #[test]
+    fn docker_volume_prune_warned() {
+        assert_warns("docker volume prune -f");
+    }
+    #[test]
+    fn docker_build_allowed() {
+        assert_allows("docker build -t myimage .");
+    }
 
     // -- Secrets --------------------------------------------------
 
-    #[test] fn sops_decrypt_pipe_warned()    { assert_warns("sops -d secrets.yaml | cat"); }
-    #[test] fn sops_decrypt_file_allowed()   { assert_allows("sops -d secrets.yaml > decrypted.yaml"); }
-    #[test] fn echo_token_warned()           { assert_warns("echo $GITHUB_TOKEN"); }
-    #[test] fn echo_normal_allowed()         { assert_allows("echo hello world"); }
+    #[test]
+    fn sops_decrypt_pipe_warned() {
+        assert_warns("sops -d secrets.yaml | cat");
+    }
+    #[test]
+    fn sops_decrypt_file_allowed() {
+        assert_allows("sops -d secrets.yaml > decrypted.yaml");
+    }
+    #[test]
+    fn echo_token_warned() {
+        assert_warns("echo $GITHUB_TOKEN");
+    }
+    #[test]
+    fn echo_normal_allowed() {
+        assert_allows("echo hello world");
+    }
 
     // -- Terraform ------------------------------------------------
 
-    #[test] fn terraform_destroy_blocked()      { assert_blocks("terraform destroy"); }
-    #[test] fn terraform_apply_auto_warned()    { assert_warns("terraform apply -auto-approve"); }
-    #[test] fn terraform_plan_allowed()         { assert_allows("terraform plan"); }
-    #[test] fn terraform_apply_allowed()        { assert_allows("terraform apply"); }
-    #[test] fn terraform_force_unlock_blocked() { assert_blocks("terraform force-unlock abc123"); }
-    #[test] fn terraform_state_rm_blocked()     { assert_blocks("terraform state rm aws_instance.web"); }
-    #[test] fn terraform_state_list_allowed()   { assert_allows("terraform state list"); }
-    #[test] fn pulumi_destroy_blocked()         { assert_blocks("pulumi destroy"); }
-    #[test] fn pulumi_up_allowed()              { assert_allows("pulumi up"); }
+    #[test]
+    fn terraform_destroy_blocked() {
+        assert_blocks("terraform destroy");
+    }
+    #[test]
+    fn terraform_apply_auto_warned() {
+        assert_warns("terraform apply -auto-approve");
+    }
+    #[test]
+    fn terraform_plan_allowed() {
+        assert_allows("terraform plan");
+    }
+    #[test]
+    fn terraform_apply_allowed() {
+        assert_allows("terraform apply");
+    }
+    #[test]
+    fn terraform_force_unlock_blocked() {
+        assert_blocks("terraform force-unlock abc123");
+    }
+    #[test]
+    fn terraform_state_rm_blocked() {
+        assert_blocks("terraform state rm aws_instance.web");
+    }
+    #[test]
+    fn terraform_state_list_allowed() {
+        assert_allows("terraform state list");
+    }
+    #[test]
+    fn pulumi_destroy_blocked() {
+        assert_blocks("pulumi destroy");
+    }
+    #[test]
+    fn pulumi_up_allowed() {
+        assert_allows("pulumi up");
+    }
 
     // -- FluxCD ---------------------------------------------------
 
-    #[test] fn flux_uninstall_blocked()         { assert_blocks("flux uninstall"); }
-    #[test] fn flux_delete_source_warned()      { assert_warns("flux delete source git my-repo"); }
-    #[test] fn flux_delete_ks_warned()          { assert_warns("flux delete kustomization my-app"); }
-    #[test] fn flux_reconcile_allowed()         { assert_allows("flux reconcile kustomization my-app"); }
-    #[test] fn flux_get_allowed()               { assert_allows("flux get kustomizations"); }
+    #[test]
+    fn flux_uninstall_blocked() {
+        assert_blocks("flux uninstall");
+    }
+    #[test]
+    fn flux_delete_source_warned() {
+        assert_warns("flux delete source git my-repo");
+    }
+    #[test]
+    fn flux_delete_ks_warned() {
+        assert_warns("flux delete kustomization my-app");
+    }
+    #[test]
+    fn flux_reconcile_allowed() {
+        assert_allows("flux reconcile kustomization my-app");
+    }
+    #[test]
+    fn flux_get_allowed() {
+        assert_allows("flux get kustomizations");
+    }
 
     // -- Engine trait ---------------------------------------------
 
@@ -535,7 +779,11 @@ mod tests {
     fn rules_returns_slice() {
         let e = engine();
         let rules: &[Rule] = e.rules();
-        assert!(rules.len() >= 60, "expected 60+ default rules, got {}", rules.len());
+        assert!(
+            rules.len() >= 60,
+            "expected 60+ default rules, got {}",
+            rules.len()
+        );
     }
 
     #[test]
@@ -563,12 +811,30 @@ mod tests {
 
     // -- Variable expansion ---------------------------------------
 
-    #[test] fn var_as_command_warned()       { assert_warns("$cmd --force"); }
-    #[test] fn indirect_eval_var_warned()    { assert_warns(r#"eval "$user_input""#); }
-    #[test] fn bash_c_var_warned()           { assert_warns(r#"bash -c "$cmd""#); }
-    #[test] fn backtick_rm_warned()          { assert_warns("echo `rm -rf /tmp`"); }
-    #[test] fn backtick_date_allowed()       { assert_allows("echo `date`"); }
-    #[test] fn echo_dollar_home_allowed()    { assert_allows("echo $HOME"); }
+    #[test]
+    fn var_as_command_warned() {
+        assert_warns("$cmd --force");
+    }
+    #[test]
+    fn indirect_eval_var_warned() {
+        assert_warns(r#"eval "$user_input""#);
+    }
+    #[test]
+    fn bash_c_var_warned() {
+        assert_warns(r#"bash -c "$cmd""#);
+    }
+    #[test]
+    fn backtick_rm_warned() {
+        assert_warns("echo `rm -rf /tmp`");
+    }
+    #[test]
+    fn backtick_date_allowed() {
+        assert_allows("echo `date`");
+    }
+    #[test]
+    fn echo_dollar_home_allowed() {
+        assert_allows("echo $HOME");
+    }
 
     // -- Prefilter: $ and backtick --------------------------------
 
@@ -657,8 +923,12 @@ mod tests {
     #[test]
     fn warn_only_engine() {
         let rules = vec![
-            Rule::builder("w1", r"rm\s+-rf").severity(Severity::Warn).build(),
-            Rule::builder("w2", r"delete").severity(Severity::Warn).build(),
+            Rule::builder("w1", r"rm\s+-rf")
+                .severity(Severity::Warn)
+                .build(),
+            Rule::builder("w2", r"delete")
+                .severity(Severity::Warn)
+                .build(),
         ];
         let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
         match engine.check("rm -rf /tmp") {
@@ -670,8 +940,12 @@ mod tests {
     #[test]
     fn multiple_warn_returns_first() {
         let rules = vec![
-            Rule::builder("first-warn", r"rm").severity(Severity::Warn).build(),
-            Rule::builder("second-warn", r"rm\s+-rf").severity(Severity::Warn).build(),
+            Rule::builder("first-warn", r"rm")
+                .severity(Severity::Warn)
+                .build(),
+            Rule::builder("second-warn", r"rm\s+-rf")
+                .severity(Severity::Warn)
+                .build(),
         ];
         let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
         match engine.check("rm -rf /") {
@@ -683,8 +957,12 @@ mod tests {
     #[test]
     fn block_before_warn_in_rule_order() {
         let rules = vec![
-            Rule::builder("warn-first", r"terraform").severity(Severity::Warn).build(),
-            Rule::builder("block-second", r"terraform\s+destroy").severity(Severity::Block).build(),
+            Rule::builder("warn-first", r"terraform")
+                .severity(Severity::Warn)
+                .build(),
+            Rule::builder("block-second", r"terraform\s+destroy")
+                .severity(Severity::Block)
+                .build(),
         ];
         let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
         match engine.check("terraform destroy") {
@@ -695,9 +973,7 @@ mod tests {
 
     #[test]
     fn no_match_returns_allow() {
-        let rules = vec![
-            Rule::builder("specific", r"very_specific_pattern_xyz").build(),
-        ];
+        let rules = vec![Rule::builder("specific", r"very_specific_pattern_xyz").build()];
         let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, NullPrefilter).unwrap();
         assert!(matches!(engine.check("cargo build"), Decision::Allow));
     }
@@ -887,7 +1163,10 @@ mod tests {
     fn prefix_set_does_not_contain_safe_commands() {
         let set = PrefixPrefilter::prefix_set();
         for safe in ["ls", "cat", "rg", "wc", "head", "tail", "grep"] {
-            assert!(!set.contains(safe), "prefix_set should not contain '{safe}'");
+            assert!(
+                !set.contains(safe),
+                "prefix_set should not contain '{safe}'"
+            );
         }
     }
 

@@ -1,9 +1,9 @@
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 // Re-export hayai cache types
-pub use hayai::cache::{CacheStore, FixedFingerprinter, Fingerprinter, MemCache, resolve_cached};
 pub use hayai::HayaiError;
+pub use hayai::cache::{CacheStore, Fingerprinter, FixedFingerprinter, MemCache, resolve_cached};
 
 use crate::model::Rule;
 
@@ -22,8 +22,7 @@ pub struct FsCache {
 impl FsCache {
     #[must_use]
     pub fn default_path() -> PathBuf {
-        crate::config::xdg_dir("XDG_CACHE_HOME", ".cache")
-            .join("guardrail/compiled.json")
+        crate::config::xdg_dir("XDG_CACHE_HOME", ".cache").join("guardrail/compiled.json")
     }
 }
 
@@ -42,7 +41,10 @@ impl CacheStore<Vec<Rule>> for FsCache {
             fingerprint,
             rules: data.clone(),
         };
-        fs::write(&self.path, serde_json::to_vec(&entry).map_err(|e| HayaiError::Json { source: e })?)?;
+        fs::write(
+            &self.path,
+            serde_json::to_vec(&entry).map_err(|e| HayaiError::Json { source: e })?,
+        )?;
         Ok(())
     }
 }
@@ -89,7 +91,8 @@ mod tests {
     fn cache_miss_resolves_and_saves() {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(42);
-        let rules = resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
+        let rules =
+            resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
         assert_eq!(rules.len(), 1);
         // Cache should now be populated
         assert!(cache.load().is_some());
@@ -105,7 +108,8 @@ mod tests {
         // Resolve should use cache (closure should NOT be called)
         let rules = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, hayai::HayaiError> {
             panic!("should not be called on cache hit");
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(rules.len(), 1);
     }
 
@@ -114,7 +118,8 @@ mod tests {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(99); // different from cached
         cache.save(42, &vec![]).unwrap();
-        let rules = resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
+        let rules =
+            resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
         assert_eq!(rules.len(), 1);
         // Cache should be updated
         assert_eq!(cache.load().unwrap().0, 99);
@@ -141,8 +146,16 @@ mod tests {
         let cache = FsCache { path: path.clone() };
 
         let rules = vec![
-            Rule::builder("r1", "p1").severity(Severity::Block).message("m1").category(Category::Git).build(),
-            Rule::builder("r2", "p2").severity(Severity::Warn).message("m2").category(Category::Docker).build(),
+            Rule::builder("r1", "p1")
+                .severity(Severity::Block)
+                .message("m1")
+                .category(Category::Git)
+                .build(),
+            Rule::builder("r2", "p2")
+                .severity(Severity::Warn)
+                .message("m2")
+                .category(Category::Docker)
+                .build(),
         ];
 
         cache.save(42, &rules).unwrap();
@@ -159,7 +172,9 @@ mod tests {
 
     #[test]
     fn fs_cache_load_missing_file() {
-        let cache = FsCache { path: PathBuf::from("/nonexistent/cache.json") };
+        let cache = FsCache {
+            path: PathBuf::from("/nonexistent/cache.json"),
+        };
         assert!(cache.load().is_none());
     }
 
@@ -247,7 +262,10 @@ mod tests {
         fs::write(&config, "test config").unwrap();
         fs::create_dir_all(&rules_dir).unwrap();
 
-        let fp = FsFingerprinter { config_path: config.clone(), rules_dir: rules_dir.clone() };
+        let fp = FsFingerprinter {
+            config_path: config.clone(),
+            rules_dir: rules_dir.clone(),
+        };
         let f1 = fp.fingerprint();
         let f2 = fp.fingerprint();
         assert_eq!(f1, f2, "fingerprint should be deterministic");
@@ -261,7 +279,10 @@ mod tests {
         fs::write(&config, "v1").unwrap();
         fs::create_dir_all(&rules_dir).unwrap();
 
-        let fp = FsFingerprinter { config_path: config.clone(), rules_dir: rules_dir.clone() };
+        let fp = FsFingerprinter {
+            config_path: config.clone(),
+            rules_dir: rules_dir.clone(),
+        };
         let f1 = fp.fingerprint();
 
         // Modify the file — fingerprint should change (based on mtime)
@@ -293,13 +314,15 @@ mod tests {
         let cache = FsCache { path };
         let fp = FixedFingerprinter(777);
 
-        let rules = resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
+        let rules =
+            resolve_cached(&cache, &fp, || Ok::<_, hayai::HayaiError>(test_rules())).unwrap();
         assert_eq!(rules.len(), 1);
 
         // Second call should hit cache
         let rules2 = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, hayai::HayaiError> {
             panic!("should not be called on cache hit");
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(rules2.len(), 1);
     }
 
@@ -310,7 +333,9 @@ mod tests {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(1);
         let result = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, HayaiError> {
-            Err(HayaiError::MutexPoisoned { context: "resolver failed".to_string() })
+            Err(HayaiError::MutexPoisoned {
+                context: "resolver failed".to_string(),
+            })
         });
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
@@ -322,9 +347,14 @@ mod tests {
         let cache: MemCache<Vec<Rule>> = MemCache::empty();
         let fp = FixedFingerprinter(1);
         let _ = resolve_cached(&cache, &fp, || -> Result<Vec<Rule>, HayaiError> {
-            Err(HayaiError::MutexPoisoned { context: "boom".to_string() })
+            Err(HayaiError::MutexPoisoned {
+                context: "boom".to_string(),
+            })
         });
-        assert!(cache.load().is_none(), "cache should remain empty on resolver error");
+        assert!(
+            cache.load().is_none(),
+            "cache should remain empty on resolver error"
+        );
     }
 
     // ── FsCache default_path env behavior ────────────────────────

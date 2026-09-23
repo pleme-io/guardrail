@@ -10,7 +10,9 @@ fn setup_with_suites() -> TempDir {
     let rules_d = guardrail_dir.join("rules.d");
     fs::create_dir_all(&rules_d).unwrap();
     // Copy suite files
-    for suite in ["akeyless", "aws", "gcp", "azure", "process", "network", "nosql"] {
+    for suite in [
+        "akeyless", "aws", "gcp", "azure", "process", "network", "nosql",
+    ] {
         let src = format!("{}/rules/{suite}.yaml", env!("CARGO_MANIFEST_DIR"));
         if std::path::Path::new(&src).exists() {
             fs::copy(&src, rules_d.join(format!("{suite}.yaml"))).unwrap();
@@ -21,7 +23,8 @@ fn setup_with_suites() -> TempDir {
 
 #[test]
 fn check_blocks_rm_rf_root() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#)
         .assert()
@@ -31,7 +34,8 @@ fn check_blocks_rm_rf_root() {
 
 #[test]
 fn check_allows_ls() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"ls -la"}}"#)
         .assert()
@@ -40,9 +44,12 @@ fn check_allows_ls() {
 
 #[test]
 fn check_blocks_drop_table() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
-        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"psql -c 'DROP TABLE users'"}}"#)
+        .write_stdin(
+            r#"{"tool_name":"Bash","tool_input":{"command":"psql -c 'DROP TABLE users'"}}"#,
+        )
         .assert()
         .failure()
         .stdout(predicate::str::contains("DROP TABLE"));
@@ -50,7 +57,8 @@ fn check_blocks_drop_table() {
 
 #[test]
 fn check_allows_select() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"psql -c 'SELECT 1'"}}"#)
         .assert()
@@ -59,7 +67,8 @@ fn check_allows_select() {
 
 #[test]
 fn check_blocks_terraform_destroy() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"terraform destroy"}}"#)
         .assert()
@@ -68,7 +77,8 @@ fn check_blocks_terraform_destroy() {
 
 #[test]
 fn check_allows_terraform_plan() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"terraform plan"}}"#)
         .assert()
@@ -77,7 +87,8 @@ fn check_allows_terraform_plan() {
 
 #[test]
 fn check_allows_non_bash_tool() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Write","tool_input":{"file_path":"/tmp/test"}}"#)
         .assert()
@@ -86,7 +97,8 @@ fn check_allows_non_bash_tool() {
 
 #[test]
 fn check_allows_empty_input() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{}"#)
         .assert()
@@ -95,7 +107,8 @@ fn check_allows_empty_input() {
 
 #[test]
 fn validate_succeeds_without_config() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["validate"])
         .assert()
         .success();
@@ -103,7 +116,8 @@ fn validate_succeeds_without_config() {
 
 #[test]
 fn list_shows_rules() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["list"])
         .assert()
         .success()
@@ -114,7 +128,8 @@ fn list_shows_rules() {
 
 #[test]
 fn search_advise_emits_context_for_grep() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-advise"])
         .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"fn main"}}"#)
         .assert()
@@ -129,7 +144,8 @@ fn search_advise_emits_context_for_grep() {
 
 #[test]
 fn search_advise_emits_context_for_glob() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-advise"])
         .write_stdin(r#"{"tool_name":"Glob","tool_input":{"glob":"**/*.rs"}}"#)
         .assert()
@@ -140,7 +156,8 @@ fn search_advise_emits_context_for_glob() {
 
 #[test]
 fn search_advise_non_search_tool_is_silent() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-advise"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#)
         .assert()
@@ -150,7 +167,8 @@ fn search_advise_non_search_tool_is_silent() {
 
 #[test]
 fn search_advise_bad_json_exits_zero_silent() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-advise"])
         .write_stdin("this is not json")
         .assert()
@@ -160,7 +178,8 @@ fn search_advise_bad_json_exits_zero_silent() {
 
 #[test]
 fn search_nudge_never_denies() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-nudge"])
         .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"SomeSymbol"}}"#)
         .assert()
@@ -171,7 +190,8 @@ fn search_nudge_never_denies() {
 
 #[test]
 fn search_nudge_bad_json_exits_zero_silent() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-nudge"])
         .write_stdin("not json at all")
         .assert()
@@ -181,7 +201,8 @@ fn search_nudge_bad_json_exits_zero_silent() {
 
 #[test]
 fn search_nudge_non_search_tool_is_silent() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["search-nudge"])
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#)
         .assert()
@@ -268,7 +289,8 @@ fn mcp_tool_nested_dangerous_string_blocks() {
 
 #[test]
 fn mcp_safe_tool_allows() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"mcp__github__get_me","tool_input":{"reason":"check auth"}}"#)
         .assert()
@@ -277,7 +299,8 @@ fn mcp_safe_tool_allows() {
 
 #[test]
 fn read_tool_passes_through() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name":"Read","tool_input":{"file_path":"/etc/passwd"}}"#)
         .assert()
@@ -303,9 +326,12 @@ fn write_then_bash_chain_blocked() {
         .success(); // Write itself is just warned
 
     // Step 2: Execute that file — should be blocked via journal
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
-        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"bash /tmp/guardrail-test-evil.sh"}}"#)
+        .write_stdin(
+            r#"{"tool_name":"Bash","tool_input":{"command":"bash /tmp/guardrail-test-evil.sh"}}"#,
+        )
         .assert()
         .failure()
         .stdout(predicate::str::contains("write-bash-chain"));
@@ -321,9 +347,12 @@ fn write_safe_then_bash_allowed() {
         .success();
 
     // Step 2: Execute that file — should be allowed (not dangerous)
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
-        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"bash /tmp/guardrail-test-safe.sh"}}"#)
+        .write_stdin(
+            r#"{"tool_name":"Bash","tool_input":{"command":"bash /tmp/guardrail-test-safe.sh"}}"#,
+        )
         .assert()
         .success();
 }
@@ -331,7 +360,8 @@ fn write_safe_then_bash_allowed() {
 #[test]
 fn nosql_suite_blocks_flushall() {
     let dir = setup_with_suites();
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .env("XDG_CONFIG_HOME", dir.path())
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"redis-cli FLUSHALL"}}"#)
@@ -343,7 +373,8 @@ fn nosql_suite_blocks_flushall() {
 
 #[test]
 fn check_invalid_json_fails() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin("this is not json")
         .assert()
@@ -352,7 +383,8 @@ fn check_invalid_json_fails() {
 
 #[test]
 fn check_null_tool_name_allows() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .write_stdin(r#"{"tool_name": null, "tool_input": null}"#)
         .assert()
@@ -364,7 +396,8 @@ fn check_null_tool_name_allows() {
 #[test]
 fn compile_succeeds() {
     let cache_dir = TempDir::new().unwrap();
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["compile"])
         .env("XDG_CACHE_HOME", cache_dir.path())
         .assert()
@@ -375,13 +408,18 @@ fn compile_succeeds() {
 #[test]
 fn compile_creates_cache_file() {
     let cache_dir = TempDir::new().unwrap();
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["compile"])
         .env("XDG_CACHE_HOME", cache_dir.path())
         .assert()
         .success();
     let cache_path = cache_dir.path().join("guardrail/compiled.json");
-    assert!(cache_path.exists(), "compile should create cache file at {}", cache_path.display());
+    assert!(
+        cache_path.exists(),
+        "compile should create cache file at {}",
+        cache_path.display()
+    );
 }
 
 // ── Validate command ────────────────────────────────────────
@@ -391,12 +429,17 @@ fn validate_with_valid_config() {
     let dir = TempDir::new().unwrap();
     let config_dir = dir.path().join("guardrail");
     fs::create_dir_all(&config_dir).unwrap();
-    fs::write(config_dir.join("guardrail.yaml"), r#"
+    fs::write(
+        config_dir.join("guardrail.yaml"),
+        r#"
 disabledRules:
   - rm-rf-root
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["validate"])
         .env("XDG_CONFIG_HOME", dir.path())
         .assert()
@@ -408,7 +451,8 @@ disabledRules:
 
 #[test]
 fn list_shows_block_and_warn_rules() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["list"])
         .assert()
         .success()
@@ -417,7 +461,8 @@ fn list_shows_block_and_warn_rules() {
 
 #[test]
 fn list_shows_rule_count() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["list"])
         .assert()
         .success()
@@ -429,7 +474,8 @@ fn list_shows_rule_count() {
 #[test]
 fn process_suite_blocks_shutdown() {
     let dir = setup_with_suites();
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .env("XDG_CONFIG_HOME", dir.path())
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"shutdown -h now"}}"#)
@@ -440,7 +486,8 @@ fn process_suite_blocks_shutdown() {
 #[test]
 fn network_suite_blocks_iptables_flush() {
     let dir = setup_with_suites();
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .env("XDG_CONFIG_HOME", dir.path())
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"iptables -F"}}"#)
@@ -452,9 +499,12 @@ fn network_suite_blocks_iptables_flush() {
 
 #[test]
 fn check_blocks_sql_comment_bypass() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
-        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"psql -c 'DROP/**/TABLE users'"}}"#)
+        .write_stdin(
+            r#"{"tool_name":"Bash","tool_input":{"command":"psql -c 'DROP/**/TABLE users'"}}"#,
+        )
         .assert()
         .failure()
         .stdout(predicate::str::contains("block"));
@@ -484,9 +534,12 @@ fn check_allows_nix_safe_command() {
 
 #[test]
 fn check_blocks_force_push_main() {
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
-        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}"#)
+        .write_stdin(
+            r#"{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}"#,
+        )
         .assert()
         .failure();
 }
@@ -507,12 +560,17 @@ fn disabled_rule_allows_previously_blocked() {
     let dir = TempDir::new().unwrap();
     let config_dir = dir.path().join("guardrail");
     fs::create_dir_all(&config_dir).unwrap();
-    fs::write(config_dir.join("guardrail.yaml"), r#"
+    fs::write(
+        config_dir.join("guardrail.yaml"),
+        r#"
 disabledRules:
   - rm-rf-root
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .env("XDG_CONFIG_HOME", dir.path())
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#)
@@ -525,12 +583,17 @@ fn disabled_category_allows_all_rules_in_category() {
     let dir = TempDir::new().unwrap();
     let config_dir = dir.path().join("guardrail");
     fs::create_dir_all(&config_dir).unwrap();
-    fs::write(config_dir.join("guardrail.yaml"), r#"
+    fs::write(
+        config_dir.join("guardrail.yaml"),
+        r#"
 categories:
   filesystem: false
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
-    Command::cargo_bin("guardrail").unwrap()
+    Command::cargo_bin("guardrail")
+        .unwrap()
         .args(["check"])
         .env("XDG_CONFIG_HOME", dir.path())
         .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#)

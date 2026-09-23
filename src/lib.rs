@@ -8,10 +8,10 @@ pub mod model;
 pub mod testing;
 
 // Re-export hayai types that guardrail consumers use
+pub use hayai::cache::{CacheStore, Fingerprinter, FixedFingerprinter, MemCache};
 pub use hayai::engine::{
     ChainedNormalizer, IdentityNormalizer, Normalizer, NullPrefilter, PathNormalizer, Prefilter,
 };
-pub use hayai::cache::{CacheStore, FixedFingerprinter, Fingerprinter, MemCache};
 
 // Re-export domain types
 pub use cache::{FsCache, FsFingerprinter};

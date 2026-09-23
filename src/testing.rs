@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::time::Instant;
 
-use crate::engine::{PrefixPrefilter, Prefilter, RegexEngine, RuleEngine};
+use crate::engine::{Prefilter, PrefixPrefilter, RegexEngine, RuleEngine};
 use crate::model::{Decision, Rule};
 
 // ═══════════════════════════════════════════════════════════════════
@@ -38,10 +38,7 @@ fn synthesize_matching_command(pattern: &str, name: &str) -> String {
     let re = Regex::new(pattern).ok();
 
     // Try multiple strategies, return the first that matches
-    let candidates = [
-        synthesize_from_pattern(pattern),
-        synthesize_from_name(name),
-    ];
+    let candidates = [synthesize_from_pattern(pattern), synthesize_from_name(name)];
 
     if let Some(re) = &re {
         for candidate in &candidates {
@@ -52,7 +49,10 @@ fn synthesize_matching_command(pattern: &str, name: &str) -> String {
     }
 
     // Last resort: return pattern-derived even if unverified
-    candidates.into_iter().next().unwrap_or_else(|| name.replace('-', " "))
+    candidates
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| name.replace('-', " "))
 }
 
 /// Primary strategy: strip regex syntax to extract a literal command.
@@ -98,7 +98,10 @@ fn synthesize_from_pattern(pattern: &str) -> String {
         ("(sshd|networking|docker|k3s|kubelet)", "docker"),
         ("(unload|bootout)", "unload"),
         ("(~|\\$HOME)", "~"),
-        ("(GITHUB_TOKEN|AWS_SECRET|DATABASE_URL|API_KEY|PRIVATE_KEY)", "GITHUB_TOKEN"),
+        (
+            "(GITHUB_TOKEN|AWS_SECRET|DATABASE_URL|API_KEY|PRIVATE_KEY)",
+            "GITHUB_TOKEN",
+        ),
     ];
     for &(from, to) in alternations {
         s = s.replace(from, to);
@@ -188,10 +191,7 @@ pub fn validate_all_rules_regex(rules: &[Rule]) -> Vec<String> {
         let re = match Regex::new(&rule.pattern) {
             Ok(r) => r,
             Err(e) => {
-                failures.push(format!(
-                    "rule '{}': pattern compile error: {e}",
-                    rule.name
-                ));
+                failures.push(format!("rule '{}': pattern compile error: {e}", rule.name));
                 continue;
             }
         };
@@ -321,7 +321,10 @@ mod tests {
         let suites: &[(&str, &str)] = &[
             ("defaults", include_str!("../rules/defaults.yaml")),
             ("akeyless", include_str!("../rules/akeyless.yaml")),
-            ("akeyless-generated", include_str!("../rules/akeyless-generated.yaml")),
+            (
+                "akeyless-generated",
+                include_str!("../rules/akeyless-generated.yaml"),
+            ),
             ("aws", include_str!("../rules/aws.yaml")),
             ("aws-generated", include_str!("../rules/aws-generated.yaml")),
             ("azure", include_str!("../rules/azure.yaml")),
@@ -330,7 +333,10 @@ mod tests {
             ("nosql", include_str!("../rules/nosql.yaml")),
             ("process", include_str!("../rules/process.yaml")),
             ("sql", include_str!("../rules/sql.yaml")),
-            ("pleme-doctrine", include_str!("../rules/pleme-doctrine.yaml")),
+            (
+                "pleme-doctrine",
+                include_str!("../rules/pleme-doctrine.yaml"),
+            ),
         ];
 
         let mut all = Vec::new();
@@ -491,16 +497,17 @@ mod tests {
     fn synthesize_rm_rf_root() {
         let cmd = synthesize_from_pattern("rm\\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\\s+/\\s*$");
         let re = Regex::new("rm\\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\\s+/\\s*$").unwrap();
-        assert!(re.is_match(&cmd), "synthesized '{cmd}' doesn't match rm-rf-root");
+        assert!(
+            re.is_match(&cmd),
+            "synthesized '{cmd}' doesn't match rm-rf-root"
+        );
     }
 
     #[test]
     fn synthesize_git_force_push_main() {
-        let cmd = synthesize_from_pattern(
-            "git\\s+push\\s+.*--force[a-z-]*\\s+\\S+\\s+(main|master)\\b",
-        );
-        let re = Regex::new("git\\s+push\\s+.*--force[a-z-]*\\s+\\S+\\s+(main|master)\\b")
-            .unwrap();
+        let cmd =
+            synthesize_from_pattern("git\\s+push\\s+.*--force[a-z-]*\\s+\\S+\\s+(main|master)\\b");
+        let re = Regex::new("git\\s+push\\s+.*--force[a-z-]*\\s+\\S+\\s+(main|master)\\b").unwrap();
         assert!(
             re.is_match(&cmd),
             "synthesized '{cmd}' doesn't match git-force-push-main"
@@ -611,7 +618,11 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Should find exactly the dangerous lines (prefilter rejects safe ones)
-        assert!(lines.len() >= 4, "expected 4+ dangerous lines, got {}", lines.len());
+        assert!(
+            lines.len() >= 4,
+            "expected 4+ dangerous lines, got {}",
+            lines.len()
+        );
 
         // Content scanning of 1000 lines should be under 100ms even in debug mode
         // (release mode: <1ms via prefilter fast-reject of safe lines)
@@ -619,7 +630,10 @@ mod tests {
             elapsed.as_millis() < 100,
             "Content scan too slow for 1000 lines: {elapsed:?}"
         );
-        eprintln!("Content scan (1000 lines, {} dangerous): {elapsed:?}", lines.len());
+        eprintln!(
+            "Content scan (1000 lines, {} dangerous): {elapsed:?}",
+            lines.len()
+        );
     }
 
     // ── derive_test_block / derive_test_allow ────────────────────
@@ -772,7 +786,9 @@ mod pleme_doctrine_tests {
     fn sed_inplace_rules_are_block_not_warn() {
         let rules = doctrine();
         for name in ["sed-inplace-any-file"] {
-            let r = rules.iter().find(|r| r.name == name)
+            let r = rules
+                .iter()
+                .find(|r| r.name == name)
                 .unwrap_or_else(|| panic!("rule '{name}' is missing"));
             assert_eq!(r.severity, Severity::Block, "rule '{name}' must be Block");
         }
@@ -853,9 +869,15 @@ mod macos_defaults_tests {
     fn engine() -> RegexEngine {
         let rules: Vec<Rule> = serde_yaml::from_str(include_str!("../rules/pleme-doctrine.yaml"))
             .expect("pleme-doctrine.yaml must parse");
-        let r = rules.iter().find(|r| r.name == "macos-defaults-write-not-declared")
+        let r = rules
+            .iter()
+            .find(|r| r.name == "macos-defaults-write-not-declared")
             .expect("rule 'macos-defaults-write-not-declared' is missing");
-        assert_eq!(r.severity, Severity::Block, "declared-only macOS state is Block by operator override");
+        assert_eq!(
+            r.severity,
+            Severity::Block,
+            "declared-only macOS state is Block by operator override"
+        );
         RegexEngine::new(rules).expect("compiles")
     }
 
@@ -875,7 +897,10 @@ mod macos_defaults_tests {
             "ssh ryn '/usr/bin/defaults write com.apple.dock mru-spaces -bool false'",
             "cd /tmp && defaults write com.apple.finder AppleShowAllFiles true",
         ] {
-            assert!(!matches!(engine.check(cmd), Decision::Allow), "must fire on: {cmd}");
+            assert!(
+                !matches!(engine.check(cmd), Decision::Allow),
+                "must fire on: {cmd}"
+            );
         }
     }
 
@@ -890,7 +915,10 @@ mod macos_defaults_tests {
             "defaults domains",
             "echo 'declare it instead of running defaults write by hand'",
         ] {
-            assert!(matches!(engine.check(cmd), Decision::Allow), "must not fire on: {cmd}");
+            assert!(
+                matches!(engine.check(cmd), Decision::Allow),
+                "must not fire on: {cmd}"
+            );
         }
     }
 }

@@ -7,8 +7,7 @@ static SQL_BLOCK_COMMENT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"/\*.*?\*/").expect("SQL block comment regex is valid"));
 
 static SQL_LINE_COMMENT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?m)(?:^|[ \t])-- [^-].*$")
-        .expect("SQL line comment regex is valid")
+    regex::Regex::new(r"(?m)(?:^|[ \t])-- [^-].*$").expect("SQL line comment regex is valid")
 });
 
 /// Strips SQL block comments (`/* ... */`) and line comments (`-- ...`).
