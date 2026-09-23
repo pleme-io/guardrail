@@ -256,32 +256,178 @@ const MINT_NUDGE_MSG: &str = "That call is MINTING a new pleme-io primitive (a r
 /// `$HOME` and an absolute `/Users/<who>` all hit.
 const ORG_ROOT: &str = "code/github/pleme-io/";
 
-/// Does `path` name a REPO ROOT under the org root — exactly one segment past
-/// it — rather than something inside an existing repo?
-///
-/// `…/pleme-io/tsunagari` mints. `…/pleme-io/nix/modules/foo` does not: it is
-/// work inside a repo that already has a name.
-fn is_repo_root_path(path: &str) -> bool {
-    let Some(idx) = path.find(ORG_ROOT) else {
-        return false;
-    };
-    let tail = &path[idx + ORG_ROOT.len()..];
-    let tail = tail.trim_end_matches('/');
-    !tail.is_empty() && !tail.contains('/')
+/// A path under the org root, split at the repo boundary.
+struct OrgPath<'a> {
+    /// The path through the repo name — what `repo_has_commits` is asked about.
+    root: &'a str,
+    /// Whatever followed it; empty when the path IS a repo root.
+    tail: &'a str,
 }
 
-/// A repo-defining file: writing one into a repo root is minting even when the
-/// directory already exists.
-fn is_repo_defining_file(path: &str) -> bool {
-    let Some(idx) = path.find(ORG_ROOT) else {
-        return false;
+/// Split `…/pleme-io/<repo>[/<tail>]`. `None` when the path is not under the
+/// org root, or names the org root itself (which is not a repo being minted).
+fn split_org_path(path: &str) -> Option<OrgPath<'_>> {
+    let idx = path.find(ORG_ROOT)?;
+    let after = idx + ORG_ROOT.len();
+    let rest = path[after..].trim_end_matches('/');
+    if rest.is_empty() {
+        return None;
+    }
+    let repo_len = rest.find('/').unwrap_or(rest.len());
+    Some(OrgPath {
+        root: &path[..after + repo_len],
+        tail: rest[repo_len..].trim_start_matches('/'),
+    })
+}
+
+/// Does `path` name a REPO ROOT — exactly one segment past the org root —
+/// rather than something inside an existing repo?
+fn is_repo_root_path(path: &str) -> bool {
+    split_org_path(path).is_some_and(|p| p.tail.is_empty())
+}
+
+/// The org root itself, which is where `cargo new <name>` is usually run from.
+fn is_org_root_path(path: &str) -> bool {
+    path.trim_end_matches('/').ends_with("code/github/pleme-io")
+}
+
+fn expand_home(path: &str) -> String {
+    let Ok(home) = std::env::var("HOME") else {
+        return path.to_string();
     };
-    let tail = path[idx + ORG_ROOT.len()..].trim_end_matches('/');
-    let mut parts = tail.split('/');
-    let (Some(repo), Some(file), None) = (parts.next(), parts.next(), parts.next()) else {
-        return false;
+    for prefix in ["~/", "$HOME/", "${HOME}/"] {
+        if let Some(rest) = path.strip_prefix(prefix) {
+            return format!("{home}/{rest}");
+        }
+    }
+    path.to_string()
+}
+
+/// ★ The load-bearing false-positive defense: has this repo ever been
+/// committed to?
+///
+/// A directory that exists but carries no commit is still being minted — the
+/// name has not been registered anywhere and the nudge is exactly on time. A
+/// repo WITH history has a name the fleet already knows, so `git init` in it,
+/// `mkdir -p` on it, or a write to its `flake.nix` is ordinary work and must
+/// stay silent. This one check retires four of the five classes below, and it
+/// is only affordable because the hook is a Rust binary: a `stat` plus one
+/// `read_dir` costs microseconds against a budget the reader never feels.
+fn repo_has_commits(root: &str) -> bool {
+    let dot_git = std::path::Path::new(&expand_home(root)).join(".git");
+    match std::fs::metadata(&dot_git) {
+        // A worktree or submodule links `.git` as a FILE, and only a repo that
+        // already has history is ever linked that way.
+        Ok(meta) if meta.is_file() => return true,
+        Ok(_) => {}
+        Err(_) => return false,
+    }
+    if dot_git.join("packed-refs").exists() {
+        return true;
+    }
+    // `refs/heads` is empty between `git init` and the first commit — which is
+    // precisely the window in which a name is still being chosen.
+    std::fs::read_dir(dot_git.join("refs").join("heads"))
+        .map(|mut entries| entries.next().is_some())
+        .unwrap_or(false)
+}
+
+fn unquote(token: &str) -> &str {
+    token.trim_matches('"').trim_matches('\'')
+}
+
+/// Which repo root, if any, a shell command is CREATING.
+///
+/// Scoped three ways, because a bare substring search over the whole command
+/// fires on any mention of any repo: the verb must open its own segment (so a
+/// quoted or echoed `mkdir` is inert), the path must be an argument of that
+/// verb or the segment's `cd` target (so naming one repo while creating another
+/// elsewhere is inert), and `git clone` anywhere marks the whole command as
+/// adoption of an existing name rather than minting a new one.
+fn minted_repo_root(cmd: &str) -> Option<String> {
+    let segments: Vec<Vec<&str>> = cmd
+        .split(['&', '|', ';', '\n'])
+        .map(|segment| {
+            let tokens: Vec<&str> = segment.split_whitespace().map(unquote).collect();
+            // `sudo` is the one prefix that leaves the verb in command position.
+            match tokens.first() {
+                Some(&"sudo") => tokens[1..].to_vec(),
+                _ => tokens,
+            }
+        })
+        .collect();
+
+    // Adoption, not minting: the name already exists upstream. Decided over
+    // the WHOLE command, because `mkdir <dir> && git clone … <dir>` puts the
+    // create verb first and the disqualifying clone second.
+    if segments
+        .iter()
+        .any(|head| head.first() == Some(&"git") && head.get(1) == Some(&"clone"))
+    {
+        return None;
+    }
+
+    let mut cd_hint: Option<&str> = None;
+    for head in &segments {
+        let Some(&verb) = head.first() else { continue };
+
+        if verb == "cd" {
+            cd_hint = head.get(1).copied();
+            continue;
+        }
+
+        let args: &[&str] = match (verb, head.get(1)) {
+            ("mkdir", _) => &head[1..],
+            ("git", Some(&"init")) | ("cargo", Some(&"new" | &"init")) => &head[2..],
+            _ => continue,
+        };
+        let operands: Vec<&str> = args
+            .iter()
+            .copied()
+            .filter(|t| !t.starts_with('-'))
+            .collect();
+
+        if let Some(path) = operands.iter().find(|p| is_repo_root_path(p)) {
+            return Some((*path).to_string());
+        }
+        // `cd <org root> && cargo new <name>` — the name is bare, the place
+        // comes from the segment before it.
+        if let (Some(hint), Some(name)) = (cd_hint, operands.first()) {
+            if is_org_root_path(hint) && !name.contains('/') {
+                return Some(format!("{}/{name}", hint.trim_end_matches('/')));
+            }
+        }
+        // `cd <repo root> && git init` — the verb carries no path of its own.
+        if operands.is_empty() {
+            if let Some(hint) = cd_hint.filter(|h| is_repo_root_path(h)) {
+                return Some(hint.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Whether this tool call is minting a new primitive, given a way to ask
+/// whether a repo is already established. Split out so tests state the
+/// filesystem instead of building one.
+fn is_minting_with(
+    tool_name: Option<&str>,
+    input: &hook::ToolInput,
+    established: &dyn Fn(&str) -> bool,
+) -> bool {
+    let root: Option<String> = match tool_name {
+        Some("Bash") => input.command.as_deref().and_then(minted_repo_root),
+        // A repo-defining file mints even when the directory already exists —
+        // but only while the repo has no history.
+        Some("Write") => input
+            .file_path
+            .as_deref()
+            .and_then(split_org_path)
+            .filter(|split| matches!(split.tail, "Cargo.toml" | "flake.nix"))
+            .map(|split| split.root.to_string()),
+        _ => None,
     };
-    !repo.is_empty() && matches!(file, "Cargo.toml" | "flake.nix")
+    root.is_some_and(|root| !established(&root))
 }
 
 /// Whether this tool call is minting a new primitive.
@@ -289,24 +435,7 @@ fn is_repo_defining_file(path: &str) -> bool {
 /// Deliberately narrow. A false positive on every `mkdir` would train the
 /// reader to skip the message, and an ignored nudge is worth less than none.
 fn is_minting(tool_name: Option<&str>, input: &hook::ToolInput) -> bool {
-    match tool_name {
-        Some("Bash") => {
-            let Some(cmd) = input.command.as_deref() else {
-                return false;
-            };
-            let creates =
-                cmd.contains("mkdir") || cmd.contains("git init") || cmd.contains("cargo new");
-            creates
-                && cmd
-                    .split_whitespace()
-                    .any(|tok| is_repo_root_path(tok.trim_matches('"').trim_matches('\'')))
-        }
-        Some("Write") => input
-            .file_path
-            .as_deref()
-            .is_some_and(is_repo_defining_file),
-        _ => false,
-    }
+    is_minting_with(tool_name, input, &|root| repo_has_commits(root))
 }
 
 /// `PostToolUse` hook for Bash|Write. Emits the naming reminder when the call
@@ -569,6 +698,111 @@ mod mint_tests {
         assert!(!is_minting(
             Some("Write"),
             &write("/Users/x/code/github/pleme-io/tsunagari/src/main.rs")
+        ));
+    }
+
+    // ── The false positives, one test per class ────────────────────────────
+    //
+    // Each of these fired on the first implementation. They are the reason the
+    // detector asks the filesystem and scopes the path to the verb, rather
+    // than searching the command for a substring.
+
+    /// Pretend every repo named here is established (has commits).
+    fn established(_root: &str) -> bool {
+        true
+    }
+    /// Pretend nothing is established — a green field.
+    fn fresh(_root: &str) -> bool {
+        false
+    }
+
+    #[test]
+    fn an_established_repo_is_never_minting() {
+        // Re-initialising, re-mkdir-ing, or writing the flake of a repo that
+        // already has history is ordinary work on a name the fleet knows.
+        for cmd in [
+            "cd ~/code/github/pleme-io/nix && git init",
+            "mkdir -p ~/code/github/pleme-io/nix",
+        ] {
+            assert!(
+                !is_minting_with(Some("Bash"), &bash(cmd), &established),
+                "established repo should be silent: {cmd}"
+            );
+            assert!(
+                is_minting_with(Some("Bash"), &bash(cmd), &fresh),
+                "the same command on a repo with no commits SHOULD nudge: {cmd}"
+            );
+        }
+        assert!(!is_minting_with(
+            Some("Write"),
+            &write("/Users/x/code/github/pleme-io/nix/flake.nix"),
+            &established
+        ));
+    }
+
+    #[test]
+    fn a_repo_merely_mentioned_elsewhere_is_not_the_one_being_created() {
+        // `mkdir` creates /tmp/x; the org path belongs to a `cp` in another
+        // segment. The first implementation fired on this.
+        assert!(!is_minting_with(
+            Some("Bash"),
+            &bash("mkdir -p /tmp/x && cp -r ~/code/github/pleme-io/nix /tmp/x"),
+            &fresh
+        ));
+        assert!(!is_minting_with(
+            Some("Bash"),
+            &bash("mkdir -p /tmp/x; rm -rf ~/code/github/pleme-io/oldrepo"),
+            &fresh
+        ));
+    }
+
+    #[test]
+    fn cloning_is_adoption_not_minting() {
+        // `tend sync` shape: the name exists upstream already.
+        assert!(!is_minting_with(
+            Some("Bash"),
+            &bash(
+                "mkdir -p ~/code/github/pleme-io/foo && git clone \
+                 git@github.com:pleme-io/foo ~/code/github/pleme-io/foo"
+            ),
+            &fresh
+        ));
+    }
+
+    #[test]
+    fn a_verb_that_is_not_in_command_position_is_inert() {
+        // Quoted, echoed, or embedded in prose — not a creation.
+        for cmd in [
+            "echo \"mkdir ~/code/github/pleme-io/tsunagari\"",
+            "git commit -m \"mkdir ~/code/github/pleme-io/tsunagari\"",
+            "rg mkdir ~/code/github/pleme-io/tsunagari",
+        ] {
+            assert!(
+                !is_minting_with(Some("Bash"), &bash(cmd), &fresh),
+                "verb not in command position should be silent: {cmd}"
+            );
+        }
+        // …but `sudo` still leaves it in command position.
+        assert!(is_minting_with(
+            Some("Bash"),
+            &bash("sudo mkdir -p ~/code/github/pleme-io/tsunagari"),
+            &fresh
+        ));
+    }
+
+    #[test]
+    fn a_bare_name_takes_its_place_from_the_cd() {
+        // `cd <org root> && cargo new <name>` mints; the same from inside a
+        // repo does not, because the name is then a workspace member.
+        assert!(is_minting_with(
+            Some("Bash"),
+            &bash("cd ~/code/github/pleme-io && cargo new tsunagari"),
+            &fresh
+        ));
+        assert!(!is_minting_with(
+            Some("Bash"),
+            &bash("cd ~/code/github/pleme-io/nix && cargo new helper"),
+            &fresh
         ));
     }
 
