@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "9390e345420e7db299a7722c2001b0dfe5d68d914558affd9271d0a5f86098e6",
+  "cargo_lock_sha256": "7e066ca7d7a4a832806a066b4021dfec62bc9b68b83f5736da91bca0c0fbedd2",
   "manifest_sha256": {
-    "Cargo.toml": "c81495fd16446da37b2c494d5cfeae2d6e2955604a24b4b043943c82cabc990c"
+    "Cargo.toml": "69b34d02f6110a4856e1249cc95d50124424b384a5b34800a5e01d40f5b48bb5"
   },
   "target_resolves": {
     "base": {
@@ -574,7 +574,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.9": {
+      "guardrail-0.1.10": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -705,7 +705,7 @@
           },
           {
             "name": "thiserror",
-            "package_key": "thiserror-2.0.20",
+            "package_key": "thiserror-2.0.21",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1408,11 +1408,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "thiserror-2.0.20": {
+      "thiserror-2.0.21": {
         "runtime_dependencies": [
           {
             "name": "thiserror_impl",
-            "package_key": "thiserror-impl-2.0.20",
+            "package_key": "thiserror-impl-2.0.21",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1427,7 +1427,7 @@
           "std"
         ]
       },
-      "thiserror-impl-2.0.20": {
+      "thiserror-impl-2.0.21": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -2210,7 +2210,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.9": {
+    "guardrail-0.1.10": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2328,11 +2328,11 @@
     "termtree-0.5.1": {
       "edition": "2021"
     },
-    "thiserror-2.0.20": {
+    "thiserror-2.0.21": {
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "thiserror-impl-2.0.20": {
+    "thiserror-impl-2.0.21": {
       "edition": "2021",
       "proc_macro": true
     },
