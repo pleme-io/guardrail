@@ -3,11 +3,10 @@ use std::process;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
-use guardrail::cache::{self, FsCache, FsFingerprinter, HayaiError};
-use guardrail::config::{self, DefaultsProvider, DirectoryProvider, RuleProvider};
+use guardrail::config;
 use guardrail::hook::ScanContext;
 use guardrail::journal::{self, WriteJournal};
-use guardrail::model::{Decision, Rule};
+use guardrail::model::Decision;
 use guardrail::{CacheStore, Fingerprinter};
 use guardrail::{RuleEngine, engine::RegexEngine, hook};
 
@@ -40,41 +39,9 @@ enum Command {
     MintAdvise,
 }
 
-fn fs_cache() -> FsCache {
-    FsCache {
-        path: FsCache::default_path(),
-    }
-}
-
-fn fs_fingerprinter() -> FsFingerprinter {
-    FsFingerprinter {
-        config_path: config::config_path(),
-        rules_dir: config::rules_dir(),
-    }
-}
-
-fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
-    let defaults = DefaultsProvider;
-    let rules_d = DirectoryProvider {
-        dir: config::rules_dir(),
-    };
-    let user_config = config::load_user_config(&config::config_path())
-        .context("loading guardrail config")
-        .map_err(|e| HayaiError::Io {
-            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-        })?;
-    let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
-    config::resolve(&providers, &user_config)
-        .context("resolving rules")
-        .map_err(|e| HayaiError::Io {
-            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-        })
-}
-
-fn build_engine() -> Result<RegexEngine> {
-    let rules = cache::resolve_cached(&fs_cache(), &fs_fingerprinter(), resolve_all_rules)?;
-    RegexEngine::new(rules).context("compiling RegexSet")
-}
+// The rule set and engine now live in the library (guardrail::production)
+// so embedders build exactly what this hook enforces.
+use guardrail::production::{fs_cache, fs_fingerprinter, production_engine as build_engine, resolve_all_rules};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();

@@ -5,6 +5,7 @@ pub mod engine;
 pub mod hook;
 pub mod journal;
 pub mod model;
+pub mod production;
 pub mod testing;
 
 // Re-export hayai types that guardrail consumers use
