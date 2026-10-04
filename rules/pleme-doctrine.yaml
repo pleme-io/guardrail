@@ -240,3 +240,11 @@
   category: nix
   test_block: "defaults write com.apple.universalaccess reduceMotion -bool false"
   test_allow: "defaults read com.apple.universalaccess reduceMotion"
+
+- name: terminal-color-crate-not-kazari
+  pattern: '(^|[;&|]\s*)cargo\s+add\b[^;&|]*\s(colored|owo-colors|yansi|nu-ansi-term|termcolor|console|ansi_term|comfy-table|prettytable-rs|tabled)\b'
+  severity: warn
+  message: "ONE LOOK — pleme-io CLI output renders through kazari (pleme-io-kazari: semantic Roles, Nord from irodori, plain bytes on a pipe); a TUI is egaku-term. A second styling crate forks the fleet's look. If kazari lacks something, add it to kazari. See the ishou skill (Terminal faces) and theory/KAZARI.md."
+  category: filesystem
+  test_block: "cargo add colored"
+  test_allow: "cargo add pleme-io-kazari --features json"
