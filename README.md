@@ -109,6 +109,7 @@ guardrail check      # read hook JSON from stdin, emit a decision (the hook entr
 guardrail compile    # pre-compile rules to ~/.cache/guardrail/compiled.json
 guardrail validate   # validate the config file + all rules
 guardrail list       # show every active rule
+guardrail hook <EVENT>  # run the actions configured under hooks.<EVENT>; silent when there are none
 ```
 
 `check` is what an agent's pre-tool hook invokes; the others are operator tools.
@@ -210,6 +211,36 @@ extraRules:
 
 Five scope levels, broad to narrow: master toggle → category → suite → individual
 rule → custom additions.
+
+### Hook actions
+
+`guardrail hook <EVENT>` is one entrypoint for every Claude Code hook event
+(the list is `hooks/events.json`, with the payload field each event's matcher
+tests). It runs the actions under `hooks.<EVENT>` in order and does nothing,
+with no output and exit 0, for an event with no actions or an event this build
+does not know.
+
+```yaml
+hooks:
+  PreToolUse:
+    - action: check          # the rule engine, same decision as `guardrail check`
+      matcher: Bash
+    - action: inputLimit     # toolInputLimits, same as `guardrail input-limit`
+      matcher: mcp__atlassian__.*
+  PostToolUse:
+    - action: searchAdvise   # also searchNudge, mintAdvise
+      matcher: Grep|Glob
+  Stop:
+    - action: exec           # payload on stdin; its decision is passed through
+      command: [/path/to/tool, --flag]
+```
+
+A matcher follows Claude Code's rules: empty or `*` matches everything, `A|B`
+matches those exact names, anything else is a regex. A block or a `decision:
+block` / `permissionDecision: deny` / `continue: false` from an exec stops the
+remaining actions; exec exit 2 is passed through as a blocking exit, any other
+failure is reported and skipped. A malformed entry is skipped on its own and
+named by `guardrail validate`.
 
 ---
 

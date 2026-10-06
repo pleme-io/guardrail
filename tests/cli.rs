@@ -598,3 +598,160 @@ categories:
         .assert()
         .success();
 }
+
+fn hook_config(yaml: &str) -> (TempDir, TempDir) {
+    let dir = TempDir::new().unwrap();
+    let config_dir = dir.path().join("guardrail");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::write(config_dir.join("guardrail.yaml"), yaml).unwrap();
+    (dir, TempDir::new().unwrap())
+}
+
+fn guardrail_in(config: &TempDir, cache: &TempDir, args: &[&str]) -> Command {
+    let mut cmd = Command::cargo_bin("guardrail").unwrap();
+    cmd.args(args)
+        .env("XDG_CONFIG_HOME", config.path())
+        .env("XDG_CACHE_HOME", cache.path());
+    cmd
+}
+
+const RM_ROOT: &str =
+    r#"{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#;
+const GREP_CALL: &str =
+    r#"{"hook_event_name":"PostToolUse","tool_name":"Grep","tool_input":{"pattern":"x"}}"#;
+
+#[test]
+fn hook_with_no_actions_is_a_silent_no_op_for_every_event() {
+    let (config, cache) = hook_config("categories: {}\n");
+    for event in [
+        "PreToolUse",
+        "PostToolUse",
+        "UserPromptSubmit",
+        "Notification",
+        "Stop",
+        "SubagentStop",
+        "PreCompact",
+        "SessionStart",
+        "SessionEnd",
+    ] {
+        guardrail_in(&config, &cache, &["hook", event])
+            .write_stdin(RM_ROOT)
+            .assert()
+            .success()
+            .stdout(predicate::str::is_empty());
+    }
+}
+
+#[test]
+fn hook_for_an_unknown_event_is_silent() {
+    let (config, cache) = hook_config("hooks:\n  NotAnEvent:\n    - action: check\n");
+    guardrail_in(&config, &cache, &["hook", "NotAnEvent"])
+        .write_stdin(RM_ROOT)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn hook_check_action_blocks_like_check() {
+    let (config, cache) =
+        hook_config("hooks:\n  PreToolUse:\n    - action: check\n      matcher: Bash\n");
+    let direct = guardrail_in(&config, &cache, &["check"])
+        .write_stdin(RM_ROOT)
+        .output()
+        .unwrap();
+    let via_hook = guardrail_in(&config, &cache, &["hook", "PreToolUse"])
+        .write_stdin(RM_ROOT)
+        .output()
+        .unwrap();
+    assert_eq!(direct.status.code(), Some(1));
+    assert_eq!(via_hook.status.code(), direct.status.code());
+    assert_eq!(via_hook.stdout, direct.stdout);
+    guardrail_in(&config, &cache, &["hook", "PreToolUse"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"ls -la"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn hook_search_advise_matches_the_standalone_subcommand_byte_for_byte() {
+    let (config, cache) = hook_config(
+        "hooks:\n  PostToolUse:\n    - action: searchAdvise\n      matcher: Grep|Glob\n",
+    );
+    let direct = guardrail_in(&config, &cache, &["search-advise"])
+        .write_stdin(GREP_CALL)
+        .output()
+        .unwrap();
+    let via_hook = guardrail_in(&config, &cache, &["hook", "PostToolUse"])
+        .write_stdin(GREP_CALL)
+        .output()
+        .unwrap();
+    assert!(direct.status.success() && via_hook.status.success());
+    let parse = |b: &[u8]| serde_json::from_slice::<serde_json::Value>(b).unwrap();
+    assert_eq!(parse(&via_hook.stdout), parse(&direct.stdout));
+}
+
+#[test]
+fn hook_search_nudge_and_input_limit_and_mint_advise_actions() {
+    let (config, cache) = hook_config(
+        r#"
+toolInputLimits:
+  - name: short-comment
+    tools: [mcp__x__comment]
+    field: body
+    maxChars: 5
+    message: keep it short
+hooks:
+  PreToolUse:
+    - action: searchNudge
+      matcher: Grep|Glob
+    - action: inputLimit
+      matcher: mcp__x__comment
+  PostToolUse:
+    - action: mintAdvise
+      matcher: Bash|Write
+"#,
+    );
+    guardrail_in(&config, &cache, &["hook", "PreToolUse"])
+        .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"x"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#""hookEventName":"PreToolUse""#));
+    guardrail_in(&config, &cache, &["hook", "PreToolUse"])
+        .write_stdin(r#"{"tool_name":"mcp__x__comment","tool_input":{"body":"far too long"}}"#)
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("short-comment"));
+    guardrail_in(&config, &cache, &["hook", "PostToolUse"])
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"mkdir -p /tmp/nowhere/code/github/pleme-io/zz-unminted-name"}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("/naming"));
+}
+
+#[test]
+fn hook_exec_action_passes_its_decision_through() {
+    let (config, cache) = hook_config(
+        "hooks:\n  Stop:\n    - action: exec\n      command: [sh, -c, 'cat >/dev/null; echo stop-refused >&2; exit 2']\n",
+    );
+    guardrail_in(&config, &cache, &["hook", "Stop"])
+        .write_stdin(r#"{"hook_event_name":"Stop"}"#)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("stop-refused"));
+}
+
+#[test]
+fn validate_refuses_a_bad_hook_entry() {
+    let (config, cache) = hook_config("hooks:\n  Stop:\n    - action: exec\n      command: []\n");
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("hooks.Stop[0]"));
+    let (config, cache) =
+        hook_config("hooks:\n  Stop:\n    - action: exec\n      command: [/usr/bin/true]\n");
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .success();
+}

@@ -298,6 +298,8 @@ pub struct GuardrailConfig {
     pub change_windows: Vec<ChangeWindow>,
     #[serde(default)]
     pub prefilter: PrefilterOverrides,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub hooks: crate::dispatch::HookTable,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

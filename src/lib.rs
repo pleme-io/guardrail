@@ -1,6 +1,7 @@
 pub mod biometric;
 pub mod cache;
 pub mod config;
+pub mod dispatch;
 pub mod engine;
 pub mod hook;
 pub mod journal;

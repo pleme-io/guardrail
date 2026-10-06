@@ -55,6 +55,7 @@ full DFA testing without normalization or prefilter interference.
 | `config` | Rule resolution, providers | `RuleProvider`, `DefaultsProvider`, `DirectoryProvider` |
 | `cache` | Fingerprint-based caching | `CacheStore`, `Fingerprinter`, `CompiledCache` |
 | `hook` | Claude Code JSON parsing | `HookInput`, `parse_reader`, `extract_command` |
+| `dispatch` | `guardrail hook <EVENT>`: typed per-event actions from `hooks:` | `Action`, `ActionEntry`, `Outcome`, `Verdict`, `dispatch`, `validate` |
 | `testing` | Auto-derived test validation | `validate_all_rules_regex`, `validate_all_rules_engine`, `benchmark_rules` |
 
 ## Rule Files

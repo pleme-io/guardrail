@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 use guardrail::config;
+use guardrail::dispatch::{self, Builtin, Builtins, Outcome, Verdict};
 use guardrail::hook::ScanContext;
 use guardrail::journal::{self, WriteJournal};
 use guardrail::model::Decision;
@@ -39,6 +40,11 @@ enum Command {
     /// PostToolUse advice for Bash|Write: a new primitive is being MINTED,
     /// so route the name through /naming before it sets.
     MintAdvise,
+    /// Run the actions configured under `hooks.<EVENT>` in guardrail.yaml; silent when there are none.
+    Hook {
+        /// Claude Code hook event name, e.g. `PreToolUse` or `Stop`.
+        event: String,
+    },
 }
 
 // The rule set and engine now live in the library (guardrail::production)
@@ -58,6 +64,7 @@ fn main() -> Result<()> {
         Command::SearchNudge => cmd_search_nudge(),
         Command::MintAdvise => cmd_mint_advise(),
         Command::InputLimit => cmd_input_limit(),
+        Command::Hook { event } => cmd_hook(&event),
     }
 }
 
@@ -67,10 +74,18 @@ fn main() -> Result<()> {
 
 fn cmd_check() -> Result<()> {
     let input = hook::parse_stdin().context("reading hook input")?;
-    let scannable = hook::extract_scannable_content(&input);
+    if let Some((rule, message)) = check_input(&input)? {
+        emit_block(&rule, &message);
+    }
+    Ok(())
+}
+
+/// The `check` pipeline over one payload: the first block, if any.
+fn check_input(input: &hook::HookInput) -> Result<Option<(String, String)>> {
+    let scannable = hook::extract_scannable_content(input);
 
     if scannable.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     let engine = build_engine()?;
@@ -79,13 +94,13 @@ fn cmd_check() -> Result<()> {
     for item in &scannable {
         if item.context.is_content() {
             write_dangerous |= check_content_item(&engine, &item.text);
-        } else {
-            check_command_item(&engine, item);
+        } else if let Some(block) = check_command_item(&engine, item) {
+            return Ok(Some(block));
         }
     }
 
-    record_write_journal(&input, &scannable, write_dangerous);
-    Ok(())
+    record_write_journal(input, &scannable, write_dangerous);
+    Ok(None)
 }
 
 /// Scan file content (Write/Edit/Notebook) line by line.
@@ -106,15 +121,20 @@ fn check_content_item(engine: &RegexEngine, content: &str) -> bool {
     dangerous
 }
 
-/// Scan a command (Bash/MCP). Enforces Block decisions.
-fn check_command_item(engine: &RegexEngine, item: &hook::ScannableContent) {
+/// Scan a command (Bash/MCP). Returns the Block decision, if any.
+fn check_command_item(
+    engine: &RegexEngine,
+    item: &hook::ScannableContent,
+) -> Option<(String, String)> {
     // Check Write→Bash chaining (lazy journal load)
     if item.context == ScanContext::BashCommand {
-        check_journal_chain(&item.text);
+        if let Some(block) = check_journal_chain(&item.text) {
+            return Some(block);
+        }
     }
 
     match engine.check(&item.text) {
-        Decision::Allow => {}
+        Decision::Allow => None,
         Decision::Block { rule, message } => {
             let tag = engine
                 .rules()
@@ -123,17 +143,18 @@ fn check_command_item(engine: &RegexEngine, item: &hook::ScannableContent) {
                 .and_then(|r| r.window.clone());
             match tag {
                 Some(tag) => gate_on_window(&rule, &message, &tag),
-                None => emit_block(&rule, &message),
+                None => Some((rule, message)),
             }
         }
         Decision::Warn { rule, message } => {
             eprintln!("guardrail [{rule}]: {message}");
+            None
         }
-        _ => {}
+        _ => None,
     }
 }
 
-fn gate_on_window(rule: &str, message: &str, tag: &str) {
+fn gate_on_window(rule: &str, message: &str, tag: &str) -> Option<(String, String)> {
     let windows = guardrail::config::load_user_config(&guardrail::config::config_path())
         .map(|c| c.change_windows)
         .unwrap_or_default();
@@ -143,7 +164,7 @@ fn gate_on_window(rule: &str, message: &str, tag: &str) {
             "guardrail [{rule}]: allowed inside change window {} (until {})",
             w.name, w.end
         );
-        return;
+        return None;
     }
     let declared: Vec<String> = windows
         .iter()
@@ -155,30 +176,31 @@ fn gate_on_window(rule: &str, message: &str, tag: &str) {
     } else {
         declared.join(", ")
     };
-    emit_block(
-        rule,
-        &format!(
+    Some((
+        rule.to_string(),
+        format!(
             "{message} Only inside a `{tag}` change window; open now: none; declared: {declared}."
         ),
-    );
+    ))
 }
 
 /// Check if a Bash command executes a recently-written dangerous file.
 /// Only loads journal from disk when the command references script paths.
-fn check_journal_chain(command: &str) {
+fn check_journal_chain(command: &str) -> Option<(String, String)> {
     let executed_paths = journal::extract_executed_paths(command);
     if executed_paths.is_empty() {
-        return;
+        return None;
     }
     let journal = WriteJournal::load();
-    for path in &executed_paths {
-        if journal.is_dangerous(path) {
-            emit_block(
-                "write-bash-chain",
-                &format!("executing recently written dangerous file: {path}"),
-            );
-        }
-    }
+    executed_paths
+        .iter()
+        .find(|path| journal.is_dangerous(path))
+        .map(|path| {
+            (
+                "write-bash-chain".to_string(),
+                format!("executing recently written dangerous file: {path}"),
+            )
+        })
 }
 
 /// Record Write/Edit to journal if content was scanned.
@@ -206,11 +228,93 @@ fn record_write_journal(
 
 fn cmd_input_limit() -> Result<()> {
     let input = hook::parse_stdin().context("reading hook input")?;
-    let config = guardrail::config::load_user_config(&guardrail::config::config_path())?;
-    if let Some(b) = guardrail::limits::check(&input, &config.tool_input_limits) {
-        emit_block(&b.rule, &b.message);
+    if let Some((rule, message)) = input_limit_block(&input)? {
+        emit_block(&rule, &message);
     }
     Ok(())
+}
+
+fn input_limit_block(input: &hook::HookInput) -> Result<Option<(String, String)>> {
+    let config = guardrail::config::load_user_config(&guardrail::config::config_path())?;
+    Ok(guardrail::limits::check(input, &config.tool_input_limits).map(|b| (b.rule, b.message)))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Hook dispatcher — `hooks.<EVENT>` actions from guardrail.yaml
+// ═══════════════════════════════════════════════════════════════════
+
+struct CliBuiltins;
+
+impl Builtins for CliBuiltins {
+    fn run(&self, builtin: Builtin, event: &str, input: &hook::HookInput) -> Outcome {
+        let block = |r: Result<Option<(String, String)>>| match r {
+            Ok(Some((rule, message))) => Outcome::Block { rule, message },
+            Ok(None) => Outcome::Pass,
+            Err(e) => {
+                eprintln!("guardrail hook {event}: {e:#}");
+                Outcome::Pass
+            }
+        };
+        match builtin {
+            Builtin::Check => block(check_input(input)),
+            Builtin::InputLimit => block(input_limit_block(input)),
+            Builtin::SearchNudge => {
+                if is_search_tool(input.tool_name.as_deref()) {
+                    let mut hso = serde_json::Map::new();
+                    hso.insert("hookEventName".into(), event.into());
+                    let mut json = serde_json::Map::new();
+                    json.insert("hookSpecificOutput".into(), hso.into());
+                    Outcome::Json(json)
+                } else {
+                    Outcome::Pass
+                }
+            }
+            Builtin::SearchAdvise => {
+                if is_search_tool(input.tool_name.as_deref()) {
+                    Outcome::Context(SEARCH_NUDGE_MSG.to_string())
+                } else {
+                    Outcome::Pass
+                }
+            }
+            Builtin::MintAdvise => match &input.tool_input {
+                Some(ti) if is_minting(input.tool_name.as_deref(), ti) => {
+                    Outcome::Context(MINT_NUDGE_MSG.to_string())
+                }
+                _ => Outcome::Pass,
+            },
+        }
+    }
+}
+
+fn cmd_hook(event: &str) -> Result<()> {
+    let table = match config::load_user_config(&config::config_path()) {
+        Ok(c) => c.hooks,
+        Err(e) => {
+            eprintln!("guardrail hook {event}: {e:#}");
+            return Ok(());
+        }
+    };
+    if table.get(event).is_none_or(Vec::is_empty) {
+        return Ok(());
+    }
+    let raw = std::io::read_to_string(std::io::stdin()).unwrap_or_default();
+    match dispatch::dispatch(event, &raw, &table, &CliBuiltins) {
+        Verdict::Silent => Ok(()),
+        Verdict::Print(out) => {
+            println!("{out}");
+            Ok(())
+        }
+        Verdict::Block { rule, message } => emit_block(&rule, &message),
+        Verdict::Exit {
+            code,
+            stdout,
+            stderr,
+        } => {
+            print!("{stdout}");
+            eprint!("{stderr}");
+            process::exit(code);
+        }
+    }
 }
 
 /// Emit a block decision JSON to stdout and exit with code 1.
@@ -622,6 +726,7 @@ fn cmd_validate() -> Result<()> {
             }
         }
     }
+    failures.extend(dispatch::validate(&user_config.hooks));
     for w in guardrail::windows::invalid(&user_config.change_windows) {
         failures.push(format!(
             "change window {}: start and end must be UTC (Z) with start < end: {}..{}",
@@ -632,7 +737,7 @@ fn cmd_validate() -> Result<()> {
         for f in &failures {
             eprintln!("guardrail: {f}");
         }
-        anyhow::bail!("{} rule test or window failure(s)", failures.len());
+        anyhow::bail!("{} rule test, window or hook failure(s)", failures.len());
     }
     eprintln!(
         "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows); every rule's block and allow examples hold",
