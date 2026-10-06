@@ -29,6 +29,7 @@ impl Normalizer for SqlCommentStripper {
         };
         if has_line || SQL_LINE_COMMENT_RE.is_match(&result) {
             result = SQL_LINE_COMMENT_RE.replace_all(&result, "").into_owned();
+            return Cow::Owned(format!("{command}\n{result}"));
         }
         Cow::Owned(result)
     }

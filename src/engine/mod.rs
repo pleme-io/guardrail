@@ -173,6 +173,18 @@ mod tests {
     // -- Normalizer trait -----------------------------------------
 
     #[test]
+    fn text_after_a_double_dash_survives_normalization() {
+        let n = ChainedNormalizer {
+            first: PathNormalizer,
+            second: SqlCommentStripper,
+        };
+        let out = n.normalize("kubectl exec rabbitmq-cluster-2 -- rabbitmq-upgrade drain -t 240");
+        assert!(out.contains("rabbitmq-upgrade drain"), "{out}");
+        let sql = n.normalize("psql -c 'TRUNCATE x' -- hidden");
+        assert!(sql.lines().any(|l| !l.contains("hidden")), "{sql}");
+    }
+
+    #[test]
     fn path_normalizer_strips_nix_store_path() {
         let n = PathNormalizer;
         let result = n.normalize("/nix/store/abc123-pkg-1.0/bin/guardrail check");

@@ -60,6 +60,8 @@ const DANGEROUS_PREFIXES: &[&str] = &[
     // reached is a guard over zero subjects.
     "terraform",
     "tofu",
+    "terragrunt",
+    "argocd",
     "pulumi",
     "ansible-playbook",
     // stream editors

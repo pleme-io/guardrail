@@ -116,13 +116,51 @@ fn check_command_item(engine: &RegexEngine, item: &hook::ScannableContent) {
     match engine.check(&item.text) {
         Decision::Allow => {}
         Decision::Block { rule, message } => {
-            emit_block(&rule, &message);
+            let tag = engine
+                .rules()
+                .iter()
+                .find(|r| r.name == rule)
+                .and_then(|r| r.window.clone());
+            match tag {
+                Some(tag) => gate_on_window(&rule, &message, &tag),
+                None => emit_block(&rule, &message),
+            }
         }
         Decision::Warn { rule, message } => {
             eprintln!("guardrail [{rule}]: {message}");
         }
         _ => {}
     }
+}
+
+fn gate_on_window(rule: &str, message: &str, tag: &str) {
+    let windows = guardrail::config::load_user_config(&guardrail::config::config_path())
+        .map(|c| c.change_windows)
+        .unwrap_or_default();
+    if let Some(w) = guardrail::windows::open_window(&windows, tag, guardrail::windows::now_unix())
+    {
+        eprintln!(
+            "guardrail [{rule}]: allowed inside change window {} (until {})",
+            w.name, w.end
+        );
+        return;
+    }
+    let declared: Vec<String> = windows
+        .iter()
+        .filter(|w| w.tag == tag)
+        .map(|w| format!("{} {}..{}", w.name, w.start, w.end))
+        .collect();
+    let declared = if declared.is_empty() {
+        "none".to_string()
+    } else {
+        declared.join(", ")
+    };
+    emit_block(
+        rule,
+        &format!(
+            "{message} Only inside a `{tag}` change window; open now: none; declared: {declared}."
+        ),
+    );
 }
 
 /// Check if a Bash command executes a recently-written dangerous file.
@@ -569,11 +607,38 @@ fn cmd_compile() -> Result<()> {
 fn cmd_validate() -> Result<()> {
     let engine = build_engine()?;
     let user_config = config::load_user_config(&config::config_path())?;
+    let mut failures = Vec::new();
+    for rule in engine.rules() {
+        let single = RegexEngine::new(vec![rule.clone()])?;
+        if let Some(t) = &rule.test_block {
+            if matches!(single.check(t), Decision::Allow) {
+                failures.push(format!("{}: test_block does not match: {t}", rule.name));
+            }
+        }
+        if let Some(t) = &rule.test_allow {
+            if !matches!(single.check(t), Decision::Allow) {
+                failures.push(format!("{}: test_allow matches: {t}", rule.name));
+            }
+        }
+    }
+    for w in guardrail::windows::invalid(&user_config.change_windows) {
+        failures.push(format!(
+            "change window {}: start and end must be UTC (Z) with start < end: {}..{}",
+            w.name, w.start, w.end
+        ));
+    }
+    if !failures.is_empty() {
+        for f in &failures {
+            eprintln!("guardrail: {f}");
+        }
+        anyhow::bail!("{} rule test or window failure(s)", failures.len());
+    }
     eprintln!(
-        "guardrail: config valid ({} rules active, {} disabled, {} extra)",
+        "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows); every rule's test_block and test_allow hold",
         engine.rule_count(),
         user_config.disabled_rules.len(),
         user_config.extra_rules.len(),
+        user_config.change_windows.len(),
     );
     Ok(())
 }

@@ -45,6 +45,8 @@ pub struct Rule {
     /// Command that must NOT match this rule (for testing).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_allow: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,9 +236,15 @@ pub struct RuleBuilder {
     category: Category,
     test_block: Option<String>,
     test_allow: Option<String>,
+    window: Option<String>,
 }
 
 impl RuleBuilder {
+    #[must_use]
+    pub fn window(mut self, w: impl Into<String>) -> Self {
+        self.window = Some(w.into());
+        self
+    }
     #[must_use]
     pub fn severity(mut self, s: Severity) -> Self {
         self.severity = s;
@@ -272,6 +280,7 @@ impl RuleBuilder {
             category: self.category,
             test_block: self.test_block,
             test_allow: self.test_allow,
+            window: self.window,
         }
     }
 }
@@ -288,6 +297,7 @@ impl Rule {
             category: Category::Filesystem,
             test_block: None,
             test_allow: None,
+            window: None,
         }
     }
 }
@@ -307,6 +317,17 @@ pub struct GuardrailConfig {
     pub disabled_rules: Vec<String>,
     #[serde(default)]
     pub tool_input_limits: Vec<ToolInputLimit>,
+    #[serde(default)]
+    pub change_windows: Vec<ChangeWindow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeWindow {
+    pub name: String,
+    pub tag: String,
+    pub start: String,
+    pub end: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

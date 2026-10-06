@@ -8,6 +8,7 @@ pub mod limits;
 pub mod model;
 pub mod production;
 pub mod testing;
+pub mod windows;
 
 // Re-export hayai types that guardrail consumers use
 pub use hayai::cache::{CacheStore, Fingerprinter, FixedFingerprinter, MemCache};
