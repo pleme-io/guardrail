@@ -34,6 +34,8 @@ enum Command {
     SearchAdvise,
     /// PreToolUse nudge for Grep|Glob (advisory-only; never denies — yet).
     SearchNudge,
+    /// PreToolUse: block a tool call whose configured field is over its `toolInputLimits` length.
+    InputLimit,
     /// PostToolUse advice for Bash|Write: a new primitive is being MINTED,
     /// so route the name through /naming before it sets.
     MintAdvise,
@@ -41,7 +43,9 @@ enum Command {
 
 // The rule set and engine now live in the library (guardrail::production)
 // so embedders build exactly what this hook enforces.
-use guardrail::production::{fs_cache, fs_fingerprinter, production_engine as build_engine, resolve_all_rules};
+use guardrail::production::{
+    fs_cache, fs_fingerprinter, production_engine as build_engine, resolve_all_rules,
+};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -53,6 +57,7 @@ fn main() -> Result<()> {
         Command::SearchAdvise => cmd_search_advise(),
         Command::SearchNudge => cmd_search_nudge(),
         Command::MintAdvise => cmd_mint_advise(),
+        Command::InputLimit => cmd_input_limit(),
     }
 }
 
@@ -159,6 +164,15 @@ fn record_write_journal(
     journal.record(fp, dangerous);
     // Best-effort save — don't fail the check if journal write fails
     let _ = journal.save();
+}
+
+fn cmd_input_limit() -> Result<()> {
+    let input = hook::parse_stdin().context("reading hook input")?;
+    let config = guardrail::config::load_user_config(&guardrail::config::config_path())?;
+    if let Some(b) = guardrail::limits::check(&input, &config.tool_input_limits) {
+        emit_block(&b.rule, &b.message);
+    }
+    Ok(())
 }
 
 /// Emit a block decision JSON to stdout and exit with code 1.

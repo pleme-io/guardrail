@@ -4,6 +4,7 @@ pub mod config;
 pub mod engine;
 pub mod hook;
 pub mod journal;
+pub mod limits;
 pub mod model;
 pub mod production;
 pub mod testing;

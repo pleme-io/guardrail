@@ -305,6 +305,18 @@ pub struct GuardrailConfig {
     /// Compiled-in rule names to disable.
     #[serde(default)]
     pub disabled_rules: Vec<String>,
+    #[serde(default)]
+    pub tool_input_limits: Vec<ToolInputLimit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolInputLimit {
+    pub name: String,
+    pub tools: Vec<String>,
+    pub field: String,
+    pub max_chars: usize,
+    pub message: String,
 }
 
 impl GuardrailConfig {
