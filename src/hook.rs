@@ -7,6 +7,9 @@ use serde::Deserialize;
 pub struct HookInput {
     pub tool_name: Option<String>,
     pub tool_input: Option<ToolInput>,
+    /// The session's working directory when the tool was called.
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 /// Tool input fields — captures Bash, Write, Edit, `NotebookEdit`, and MCP tools.
@@ -155,6 +158,33 @@ pub fn extract_scannable_content(input: &HookInput) -> Vec<ScannableContent> {
     items
 }
 
+impl ToolInput {
+    /// Every string the named field carries: the field itself, or each string nested in it.
+    #[must_use]
+    pub fn field_texts(&self, name: &str) -> Vec<String> {
+        let named = match name {
+            "command" => &self.command,
+            "file_path" => &self.file_path,
+            "content" => &self.content,
+            "new_string" => &self.new_string,
+            "old_string" => &self.old_string,
+            "new_source" => &self.new_source,
+            "pattern" => &self.pattern,
+            "path" => &self.path,
+            "glob" => &self.glob,
+            "output_mode" => &self.output_mode,
+            _ => {
+                let mut items = Vec::new();
+                if let Some(v) = self.extra.get(name) {
+                    McpStringCollector { items: &mut items }.collect_value(v, 0);
+                }
+                return items.into_iter().map(|i| i.text).collect();
+            }
+        };
+        named.iter().cloned().collect()
+    }
+}
+
 /// Maximum recursion depth for MCP JSON parameter collection.
 const MCP_JSON_MAX_DEPTH: usize = 8;
 
@@ -293,7 +323,7 @@ mod tests {
 
     #[test]
     fn parse_empty_input() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let input = parse_reader(json.as_bytes()).unwrap();
         assert_eq!(extract_command(&input), None);
     }
@@ -449,13 +479,14 @@ mod tests {
 
     #[test]
     fn mcp_max_strings_enforced() {
+        use std::fmt::Write as _;
         // Build a JSON object with 100 string fields — should be capped at MCP_JSON_MAX_STRINGS
         let mut fields = String::new();
         for i in 0..100 {
             if i > 0 {
                 fields.push_str(", ");
             }
-            fields.push_str(&format!(r#""field_{i}": "value_{i}""#));
+            let _ = write!(fields, r#""field_{i}": "value_{i}""#);
         }
         let json = format!(r#"{{"tool_name": "mcp__test__tool", "tool_input": {{{fields}}}}}"#);
         let input = parse_reader(json.as_bytes()).unwrap();

@@ -270,7 +270,6 @@ pub struct BenchmarkResult {
 ///
 /// Panics if the rules fail to compile into a `RegexSet`, which
 /// indicates invalid regex patterns in the input.
-#[must_use]
 pub fn benchmark_rules(rules: &[Rule]) -> BenchmarkResult {
     let start = Instant::now();
     let engine = RegexEngine::new(rules.to_vec()).expect("rules must compile for benchmark");
@@ -590,12 +589,13 @@ mod tests {
     #[test]
     fn content_scan_performance() {
         use crate::hook;
+        use std::fmt::Write as _;
         use std::time::Instant;
 
         // Simulate a large file write (1000 lines, mostly safe)
         let mut content = String::new();
         for i in 0..995 {
-            content.push_str(&format!("const x{i} = {i};\n"));
+            let _ = writeln!(content, "const x{i} = {i};");
         }
         // Add a few dangerous lines
         content.push_str("rm -rf /tmp\n");

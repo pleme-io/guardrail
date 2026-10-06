@@ -164,7 +164,18 @@ name.
   category: filesystem
   test_block: "rm -rf /"        # optional: this command MUST match the pattern
   test_allow: "rm -rf ./target" # optional: this command must NOT match
+  examples:                     # optional: more cases; an entry is a string or {input, tool, cwd}
+    block: ["rm -rf / --no-preserve-root"]
+    allow: ["rm -rf build/"]
+  window: team-production       # optional: allowed only inside an open change window with this tag
+  tools: [Write, Edit]          # optional: exact tool names the rule applies to
+  field: file_path              # optional: the tool_input field the pattern reads
+  cwd: '/team-repos/'           # optional: regex the call's working directory must match
 ```
+
+Every key is checked: an unknown key is a parse error for that entry, which is
+skipped while its siblings keep working, and `guardrail validate` fails naming it.
+`guardrail schema` prints every accepted key by struct.
 
 ---
 
@@ -296,10 +307,12 @@ any agent with a pre-execution hook:
 Adding guardrail to a new agent is one line of hook wiring; everything else is
 shared.
 
-In the pleme-io fleet the wiring is declarative: a `blackmatter-claude`
-home-manager module deploys `guardrail.yaml`, copies the enabled suites into
-`rules.d/`, wires the hook into the agent's settings, and runs `guardrail compile`
-from a `home.activation` hook — so every workstation gets the same guardrails by
+In the pleme-io fleet the wiring is declarative: this flake's home-manager
+module (one module-trio spec, typed options mirroring the Rust config 1:1)
+renders `guardrail.yaml` and the enabled suites into `rules.d/` through a
+derivation that runs `guardrail validate`, and runs `guardrail compile` from a
+`home.activation` hook; `blackmatter-claude` imports it and wires the hooks into
+the agent's settings — so every workstation gets the same guardrails by
 construction.
 
 ---

@@ -14,6 +14,7 @@ use crate::cache::{self, FsCache, FsFingerprinter, HayaiError};
 use crate::config::{self, DefaultsProvider, DirectoryProvider, RuleProvider};
 use crate::engine::RegexEngine;
 use crate::model::Rule;
+use crate::scope::ScopedRules;
 
 /// The compiled-rules cache the hook uses.
 #[must_use]
@@ -54,14 +55,72 @@ pub fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
         })
 }
 
-/// The engine the hook runs — cached rule resolution, compiled RegexSet.
+/// The resolved rules through the fingerprinted cache.
 ///
 /// # Errors
-/// Rule resolution or RegexSet compilation failure.
-pub fn production_engine() -> Result<RegexEngine> {
-    let rules = cache::resolve_cached(&fs_cache(), &fs_fingerprinter(), resolve_all_rules)?;
-    RegexEngine::with_prefilter(rules, crate::engine::PrefixPrefilter::from_user_config())
+/// Rule resolution failure.
+pub fn production_rules() -> Result<Vec<Rule>> {
+    Ok(cache::resolve_cached(
+        &fs_cache(),
+        &fs_fingerprinter(),
+        resolve_all_rules,
+    )?)
+}
+
+/// The `RegexSet` engine over the unscoped rules among `rules`.
+///
+/// # Errors
+/// `RegexSet` compilation failure.
+pub fn engine_for(rules: Vec<Rule>) -> Result<RegexEngine> {
+    let unscoped = rules.into_iter().filter(|r| !r.is_scoped()).collect();
+    RegexEngine::with_prefilter(unscoped, crate::engine::PrefixPrefilter::from_user_config())
         .context("compiling RegexSet")
+}
+
+/// The engine the hook runs — cached rule resolution, compiled `RegexSet`,
+/// over every rule that names no tool, field or cwd.
+///
+/// # Errors
+/// Rule resolution or `RegexSet` compilation failure.
+pub fn production_engine() -> Result<RegexEngine> {
+    engine_for(production_rules()?)
+}
+
+/// Everything `check` matches against: the `RegexSet` engine and the scoped rules.
+#[derive(Debug)]
+pub struct Guard {
+    pub engine: RegexEngine,
+    pub scoped: ScopedRules,
+}
+
+impl Guard {
+    /// # Errors
+    /// `RegexSet` compilation failure. A scoped rule with an invalid regex is left out on its own.
+    pub fn new(rules: Vec<Rule>) -> Result<Self> {
+        let (scoped, _) = ScopedRules::new(&rules);
+        Ok(Self {
+            engine: engine_for(rules)?,
+            scoped,
+        })
+    }
+
+    #[must_use]
+    pub fn rule(&self, name: &str) -> Option<&Rule> {
+        use crate::RuleEngine;
+        self.engine
+            .rules()
+            .iter()
+            .find(|r| r.name == name)
+            .or_else(|| self.scoped.rule(name))
+    }
+}
+
+/// The guard the hook runs.
+///
+/// # Errors
+/// Rule resolution or `RegexSet` compilation failure.
+pub fn production_guard() -> Result<Guard> {
+    Guard::new(production_rules()?)
 }
 
 #[cfg(test)]

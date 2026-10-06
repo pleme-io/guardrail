@@ -28,16 +28,26 @@ enum Command {
     /// Pre-compile rules to cache for fast loading.
     Compile,
     /// Validate the guardrail config file.
-    Validate,
+    Validate {
+        /// Tools `guardrail check` is registered for, comma-separated; a rule for any other tool fails.
+        #[arg(long, value_delimiter = ',')]
+        hooked_tools: Option<Vec<String>>,
+    },
+    /// Print the config keys this build accepts, by struct, as JSON.
+    Schema {
+        /// A JSON table of the same shape (e.g. the Nix module's options); exit non-zero on any difference.
+        #[arg(long)]
+        expect: Option<std::path::PathBuf>,
+    },
     /// List all active rules.
     List,
-    /// PostToolUse advice for Grep|Glob: nudge toward the codesearch index.
+    /// `PostToolUse` advice for Grep|Glob: nudge toward the codesearch index.
     SearchAdvise,
-    /// PreToolUse nudge for Grep|Glob (advisory-only; never denies — yet).
+    /// `PreToolUse` nudge for Grep|Glob (advisory-only; never denies — yet).
     SearchNudge,
-    /// PreToolUse: block a tool call whose configured field is over its `toolInputLimits` length.
+    /// `PreToolUse`: block a tool call whose configured field is over its `toolInputLimits` length.
     InputLimit,
-    /// PostToolUse advice for Bash|Write: a new primitive is being MINTED,
+    /// `PostToolUse` advice for Bash|Write: a new primitive is being MINTED,
     /// so route the name through /naming before it sets.
     MintAdvise,
     /// Run the actions configured under `hooks.<EVENT>` in guardrail.yaml; silent when there are none.
@@ -50,7 +60,7 @@ enum Command {
 // The rule set and engine now live in the library (guardrail::production)
 // so embedders build exactly what this hook enforces.
 use guardrail::production::{
-    fs_cache, fs_fingerprinter, production_engine as build_engine, resolve_all_rules,
+    Guard, fs_cache, fs_fingerprinter, production_guard, resolve_all_rules,
 };
 
 fn main() -> Result<()> {
@@ -58,11 +68,21 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Check => cmd_check(),
         Command::Compile => cmd_compile(),
-        Command::Validate => cmd_validate(),
+        Command::Validate { hooked_tools } => cmd_validate(hooked_tools.as_deref()),
+        Command::Schema { expect } => cmd_schema(expect.as_deref()),
         Command::List => cmd_list(),
-        Command::SearchAdvise => cmd_search_advise(),
-        Command::SearchNudge => cmd_search_nudge(),
-        Command::MintAdvise => cmd_mint_advise(),
+        Command::SearchAdvise => {
+            cmd_search_advise();
+            Ok(())
+        }
+        Command::SearchNudge => {
+            cmd_search_nudge();
+            Ok(())
+        }
+        Command::MintAdvise => {
+            cmd_mint_advise();
+            Ok(())
+        }
         Command::InputLimit => cmd_input_limit(),
         Command::Hook { event } => cmd_hook(&event),
     }
@@ -83,65 +103,25 @@ fn cmd_check() -> Result<()> {
 /// The `check` pipeline over one payload: the first block, if any.
 fn check_input(input: &hook::HookInput) -> Result<Option<(String, String)>> {
     let scannable = hook::extract_scannable_content(input);
-
-    if scannable.is_empty() {
-        return Ok(None);
-    }
-
-    let engine = build_engine()?;
+    let guard = production_guard()?;
     let mut write_dangerous = false;
 
     for item in &scannable {
         if item.context.is_content() {
-            write_dangerous |= check_content_item(&engine, &item.text);
-        } else if let Some(block) = check_command_item(&engine, item) {
+            write_dangerous |= check_content_item(&guard.engine, &item.text);
+        } else if let Some(block) = check_command_item(&guard, item) {
             return Ok(Some(block));
         }
     }
 
     record_write_journal(input, &scannable, write_dangerous);
-    Ok(None)
+    Ok(decide(&guard, guard.scoped.check(input)))
 }
 
-/// Scan file content (Write/Edit/Notebook) line by line.
-/// All matches downgraded to warn. Returns true if any dangerous line found.
-fn check_content_item(engine: &RegexEngine, content: &str) -> bool {
-    let mut dangerous = false;
-    let lines = hook::scan_content_lines(content);
-    for line in &lines {
-        match engine.check(line) {
-            Decision::Allow => {}
-            Decision::Block { rule, message } | Decision::Warn { rule, message } => {
-                dangerous = true;
-                eprintln!("guardrail [{rule}]: {message}");
-            }
-            _ => {}
-        }
-    }
-    dangerous
-}
-
-/// Scan a command (Bash/MCP). Returns the Block decision, if any.
-fn check_command_item(
-    engine: &RegexEngine,
-    item: &hook::ScannableContent,
-) -> Option<(String, String)> {
-    // Check Write→Bash chaining (lazy journal load)
-    if item.context == ScanContext::BashCommand {
-        if let Some(block) = check_journal_chain(&item.text) {
-            return Some(block);
-        }
-    }
-
-    match engine.check(&item.text) {
-        Decision::Allow => None,
+fn decide(guard: &Guard, decision: Decision) -> Option<(String, String)> {
+    match decision {
         Decision::Block { rule, message } => {
-            let tag = engine
-                .rules()
-                .iter()
-                .find(|r| r.name == rule)
-                .and_then(|r| r.window.clone());
-            match tag {
+            match guard.rule(&rule).and_then(|r| r.window.clone()) {
                 Some(tag) => gate_on_window(&rule, &message, &tag),
                 None => Some((rule, message)),
             }
@@ -152,6 +132,33 @@ fn check_command_item(
         }
         _ => None,
     }
+}
+
+/// Scan file content (Write/Edit/Notebook) line by line.
+/// All matches downgraded to warn. Returns true if any dangerous line found.
+fn check_content_item(engine: &RegexEngine, content: &str) -> bool {
+    let mut dangerous = false;
+    let lines = hook::scan_content_lines(content);
+    for line in &lines {
+        if let Decision::Block { rule, message } | Decision::Warn { rule, message } =
+            engine.check(line)
+        {
+            dangerous = true;
+            eprintln!("guardrail [{rule}]: {message}");
+        }
+    }
+    dangerous
+}
+
+/// Scan a command (Bash/MCP). Returns the Block decision, if any.
+fn check_command_item(guard: &Guard, item: &hook::ScannableContent) -> Option<(String, String)> {
+    // Check Write→Bash chaining (lazy journal load)
+    if item.context == ScanContext::BashCommand
+        && let Some(block) = check_journal_chain(&item.text)
+    {
+        return Some(block);
+    }
+    decide(guard, guard.engine.check(&item.text))
 }
 
 fn gate_on_window(rule: &str, message: &str, tag: &str) -> Option<(String, String)> {
@@ -457,8 +464,7 @@ fn repo_has_commits(root: &str) -> bool {
     // `refs/heads` is empty between `git init` and the first commit — which is
     // precisely the window in which a name is still being chosen.
     std::fs::read_dir(dot_git.join("refs").join("heads"))
-        .map(|mut entries| entries.next().is_some())
-        .unwrap_or(false)
+        .is_ok_and(|mut entries| entries.next().is_some())
 }
 
 fn unquote(token: &str) -> &str {
@@ -521,16 +527,17 @@ fn minted_repo_root(cmd: &str) -> Option<String> {
         }
         // `cd <org root> && cargo new <name>` — the name is bare, the place
         // comes from the segment before it.
-        if let (Some(hint), Some(name)) = (cd_hint, operands.first()) {
-            if is_org_root_path(hint) && !name.contains('/') {
-                return Some(format!("{}/{name}", hint.trim_end_matches('/')));
-            }
+        if let (Some(hint), Some(name)) = (cd_hint, operands.first())
+            && is_org_root_path(hint)
+            && !name.contains('/')
+        {
+            return Some(format!("{}/{name}", hint.trim_end_matches('/')));
         }
         // `cd <repo root> && git init` — the verb carries no path of its own.
-        if operands.is_empty() {
-            if let Some(hint) = cd_hint.filter(|h| is_repo_root_path(h)) {
-                return Some(hint.to_string());
-            }
+        if operands.is_empty()
+            && let Some(hint) = cd_hint.filter(|h| is_repo_root_path(h))
+        {
+            return Some(hint.to_string());
         }
     }
     None
@@ -569,15 +576,15 @@ fn is_minting(tool_name: Option<&str>, input: &hook::ToolInput) -> bool {
 
 /// `PostToolUse` hook for Bash|Write. Emits the naming reminder when the call
 /// minted something, and nothing otherwise. Always exits 0.
-fn cmd_mint_advise() -> Result<()> {
+fn cmd_mint_advise() {
     let Ok(input) = hook::parse_stdin() else {
-        return Ok(());
+        return;
     };
     let Some(tool_input) = &input.tool_input else {
-        return Ok(());
+        return;
     };
     if !is_minting(input.tool_name.as_deref(), tool_input) {
-        return Ok(());
+        return;
     }
     let response = serde_json::json!({
         "hookSpecificOutput": {
@@ -586,7 +593,6 @@ fn cmd_mint_advise() -> Result<()> {
         }
     });
     println!("{response}");
-    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -649,12 +655,12 @@ fn is_search_tool(tool_name: Option<&str>) -> bool {
 ///
 /// Never errors the tool call: a parse failure or a non-search tool emits
 /// nothing and still exits 0.
-fn cmd_search_advise() -> Result<()> {
+fn cmd_search_advise() {
     let Ok(input) = hook::parse_stdin() else {
-        return Ok(());
+        return;
     };
     if !is_search_tool(input.tool_name.as_deref()) {
-        return Ok(());
+        return;
     }
     let response = serde_json::json!({
         "hookSpecificOutput": {
@@ -663,7 +669,6 @@ fn cmd_search_advise() -> Result<()> {
         }
     });
     println!("{response}");
-    Ok(())
 }
 
 /// `PreToolUse` hook for Grep|Glob. ADVISORY-ONLY for now: emits a no-op
@@ -677,12 +682,12 @@ fn cmd_search_advise() -> Result<()> {
 // (pattern/path/glob/output_mode) exist precisely so this deny path is one
 // edit away. Advisory-first is the deliberate design choice: prove the
 // signal is high before ever blocking a tool call.
-fn cmd_search_nudge() -> Result<()> {
+fn cmd_search_nudge() {
     let Ok(input) = hook::parse_stdin() else {
-        return Ok(());
+        return;
     };
     if !is_search_tool(input.tool_name.as_deref()) {
-        return Ok(());
+        return;
     }
     // No-op PreToolUse payload — no permissionDecision, so nothing is blocked.
     let response = serde_json::json!({
@@ -691,7 +696,6 @@ fn cmd_search_nudge() -> Result<()> {
         }
     });
     println!("{response}");
-    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -700,37 +704,41 @@ fn cmd_search_nudge() -> Result<()> {
 
 fn cmd_compile() -> Result<()> {
     let rules = resolve_all_rules()?;
-    let engine = RegexEngine::new(rules.clone()).context("compiling RegexSet")?;
+    let guard = Guard::new(rules.clone())?;
 
     let store = fs_cache();
     let fp = fs_fingerprinter().fingerprint();
     store.save(fp, &rules)?;
 
     eprintln!(
-        "guardrail: compiled {} rules -> {}",
-        engine.rule_count(),
+        "guardrail: compiled {} rules ({} scoped) -> {}",
+        guard.engine.rule_count() + guard.scoped.len(),
+        guard.scoped.len(),
         store.path.display()
     );
     Ok(())
 }
 
-fn cmd_validate() -> Result<()> {
-    let engine = build_engine()?;
-    let user_config = config::load_user_config(&config::config_path())?;
-    let mut failures = Vec::new();
+fn cmd_validate(hooked_tools: Option<&[String]>) -> Result<()> {
+    let rules = resolve_all_rules()?;
+    let guard = Guard::new(rules.clone())?;
+    let (user_config, config_problems) = config::load_user_config_checked(&config::config_path())?;
+    let mut failures: Vec<String> = config_problems
+        .into_iter()
+        .map(|p| format!("guardrail.yaml {p}"))
+        .collect();
+    failures.extend(
+        config::DirectoryProvider {
+            dir: config::rules_dir(),
+        }
+        .problems()?,
+    );
     let prefilter = guardrail::engine::PrefixPrefilter::from_user_config();
-    for rule in engine.rules() {
-        let single = RegexEngine::with_prefilter(vec![rule.clone()], prefilter.clone())?;
-        for t in rule.test_block.iter().chain(&rule.examples.block) {
-            if matches!(single.check(t), Decision::Allow) {
-                failures.push(format!("{}: block example does not match: {t}", rule.name));
-            }
-        }
-        for t in rule.test_allow.iter().chain(&rule.examples.allow) {
-            if !matches!(single.check(t), Decision::Allow) {
-                failures.push(format!("{}: allow example matches: {t}", rule.name));
-            }
-        }
+    for rule in &rules {
+        failures.extend(guardrail::scope::example_failures(rule, &prefilter));
+    }
+    if let Some(hooked) = hooked_tools {
+        failures.extend(guardrail::scope::unhooked(&rules, hooked));
     }
     failures.extend(dispatch::validate(&user_config.hooks));
     let (file_windows, window_file_problems) =
@@ -757,8 +765,9 @@ fn cmd_validate() -> Result<()> {
         anyhow::bail!("{} rule test, window or hook failure(s)", failures.len());
     }
     eprintln!(
-        "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows, {} from {} window files); every rule's block and allow examples hold",
-        engine.rule_count(),
+        "guardrail: config valid ({} rules active ({} scoped), {} disabled, {} extra, {} change windows, {} from {} window files); every rule's block and allow examples hold",
+        rules.len(),
+        guard.scoped.len(),
         user_config.disabled_rules.len(),
         user_config.extra_rules.len(),
         user_config.change_windows.len(),
@@ -768,9 +777,29 @@ fn cmd_validate() -> Result<()> {
     Ok(())
 }
 
+fn cmd_schema(expect: Option<&std::path::Path>) -> Result<()> {
+    let Some(path) = expect else {
+        println!("{}", guardrail::schema::schema());
+        return Ok(());
+    };
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let expected: serde_json::Value =
+        serde_json::from_str(&text).context("parsing the expected schema")?;
+    let drift = guardrail::schema::drift(&expected);
+    if drift.is_empty() {
+        eprintln!("guardrail: schema matches {}", path.display());
+        return Ok(());
+    }
+    for d in &drift {
+        eprintln!("guardrail: schema drift: {d}");
+    }
+    anyhow::bail!("{} schema difference(s)", drift.len());
+}
+
 fn cmd_list() -> Result<()> {
-    let engine = build_engine()?;
-    for rule in engine.rules() {
+    let rules = guardrail::production::production_rules()?;
+    for rule in &rules {
         let sev = if rule.severity.is_blocking() {
             "BLOCK"
         } else {
@@ -781,7 +810,7 @@ fn cmd_list() -> Result<()> {
             rule.name, rule.category, rule.message
         );
     }
-    eprintln!("\n{} rules active", engine.rule_count());
+    eprintln!("\n{} rules active", rules.len());
     Ok(())
 }
 
@@ -818,10 +847,10 @@ mod mint_tests {
     #[test]
     fn creating_a_repo_root_mints() {
         assert!(
-            is_minting(
+            !is_minting(
                 Some("Bash"),
                 &bash("mkdir -p ~/code/github/pleme-io/tsunagari/src").clone()
-            ) == false,
+            ),
             "a path two deep is not a repo root"
         );
         assert!(is_minting(

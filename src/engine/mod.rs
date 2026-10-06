@@ -20,7 +20,6 @@ use crate::model::{Decision, Rule, Severity};
 
 /// Trait for domain-specific rule matching that returns Decisions.
 pub trait RuleEngine {
-    #[must_use]
     fn check(&self, command: &str) -> Decision;
     #[must_use]
     fn rules(&self) -> &[Rule];

@@ -1,9 +1,17 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::model::{ChangeWindow, ChangeWindowFile, GuardrailConfig};
+use crate::model::{ChangeWindow, GuardrailConfig};
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowFileEntries {
+    #[serde(default)]
+    change_windows: Vec<serde_yaml::Value>,
+}
 
 #[must_use]
+#[allow(clippy::many_single_char_names)]
 pub fn parse_utc(s: &str) -> Option<i64> {
     let b = s.as_bytes();
     if b.len() != 20
@@ -80,8 +88,15 @@ pub fn from_files(paths: &[String], base: &Path) -> (Vec<ChangeWindow>, Vec<Stri
         if text.trim().is_empty() {
             continue;
         }
-        match serde_yaml::from_str::<ChangeWindowFile>(&text) {
-            Ok(f) => windows.extend(f.change_windows),
+        match serde_yaml::from_str::<WindowFileEntries>(&text) {
+            Ok(f) => {
+                for (i, entry) in f.change_windows.into_iter().enumerate() {
+                    match serde_yaml::from_value::<ChangeWindow>(entry) {
+                        Ok(w) => windows.push(w),
+                        Err(e) => problems.push(format!("{} entry {i}: {e}", path.display())),
+                    }
+                }
+            }
             Err(e) => problems.push(format!("{}: {e}", path.display())),
         }
     }

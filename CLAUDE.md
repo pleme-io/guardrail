@@ -92,7 +92,25 @@ Rule format:
     block: ["rm -rf / --no-preserve-root"]
     allow: ["rm -rf build/"]
   window: team-production       # optional: allowed only inside an open change window with this tag
+  tools: [Write, Edit]          # optional: exact tool names; unset = the tools check scans (Bash, Write, Edit, NotebookEdit, mcp__*)
+  field: file_path              # optional: the tool_input field matched; unset = the fields check scans for the tool
+  cwd: '/akeylesslabs/'         # optional: regex the hook payload's cwd must match
 ```
+
+A rule with `tools`, `field` or `cwd` is scoped: it is matched on its own
+(`src/scope.rs`), never through the prefilter, and only on calls its scope
+names. An unscoped rule runs in the RegexSet behind the prefilter exactly as
+before. A scoped rule's examples may be objects, `{input, tool, cwd}`, so the
+call it applies to is part of the example; `validate` builds that call and runs
+it. `validate --hooked-tools A,B` also fails any rule whose tool `guardrail
+check` is not registered for.
+
+Every config struct refuses an unknown key (`deny_unknown_fields`). The refusal
+is scoped: an unknown or malformed top-level key of `guardrail.yaml`, or a rule
+entry that does not parse in a suite or `extraRules`, is dropped on its own and
+its siblings keep working; `validate` fails naming it. The run-time window file
+envelope stays open (its writer adds metadata) and each window entry is strict
+on its own.
 
 `guardrail validate` runs every rule's block and allow examples and checks the
 declared change windows; a failure exits non-zero.
@@ -115,8 +133,9 @@ A category is any lowercase name (`[a-z0-9_-]+`) a suite chooses; the
 ```bash
 guardrail check     # Read hook JSON from stdin, return decision
 guardrail compile   # Pre-compile rules to ~/.cache/guardrail/compiled.json
-guardrail validate  # Validate config + rules
+guardrail validate  # Validate config + rules (--hooked-tools A,B to check hook registration)
 guardrail list      # Show all active rules
+guardrail schema    # Config keys this build accepts (--expect FILE fails on drift)
 ```
 
 ## User Config
@@ -153,12 +172,35 @@ extraRules:
 
 `Rule::builder("name", "pattern").severity(Warn).build()` for test ergonomics.
 
-## Deployment
+## Deployment — the module trio owns the option types
 
-Via `blackmatter-claude` HM module. On `nix run .#rebuild`:
-1. Deploys `guardrail.yaml` config with category toggles
-2. Copies enabled suite files to `rules.d/`
-3. Runs `guardrail compile` (home.activation)
+The flake emits `homeManagerModules` / `nixosModules` / `darwinModules` from one
+`module` spec through substrate's `rust.tool` (`module-trio.nix`). The binary
+owns the types: `nix/types.nix` mirrors the Rust config 1:1 under
+`blackmatter.components.claude.guardrail` (`hmNamespace`), `nix/render.nix`
+renders it, `nix/hm.nix` deploys it. The system arms install the package only:
+guardrail reads `~/.config/guardrail`, so a system-wide render would be read by
+nothing.
+
+| Option | Renders to |
+|---|---|
+| `enable`, `package` | `home.packages`, every hook command |
+| `categories`, `extraRules`, `disabledRules`, `toolInputLimits`, `changeWindows`, `changeWindowFiles`, `prefilter`, `hooks.<Event>` | `guardrail.yaml`, 1:1 |
+| `ruleSuites.<name>.{enable, source, rules}` | `rules.d/<name>.yaml` (a file, or typed rules; exactly one) |
+| `hookEvents`, `checkTools`, `hookRegistrations` (read-only) | what blackmatter-claude registers in Claude Code settings |
+
+On rebuild the rendered config and every suite run through `guardrail validate
+--hooked-tools <checkTools>` in a derivation that IS the deployed payload, so a
+failing example, an unknown key or a rule for an unhooked tool stops the
+rebuild. `guardrail compile` runs at activation.
+
+Parity tiers, per field: a misspelled or mistyped option is an eval error (the
+module system; `categories` names via `addCheck`); an unknown YAML key is a Rust
+parse refusal; a failing example or unhooked tool is a rebuild-time validate
+failure. `nix flake check` adds the drift gate: `guardrail-module-roundtrip`
+renders a fixture that must set every option (asserted), validates it, and runs
+`guardrail schema --expect` against the option names, so a field on one side
+only fails the build; three negative controls prove the refusals fire.
 
 ## Conventions
 

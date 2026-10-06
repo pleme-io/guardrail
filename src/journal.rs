@@ -205,10 +205,10 @@ pub fn extract_executed_paths(command: &str) -> Vec<String> {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(words[head]);
-        if SHELL_INTERPRETERS.contains(&basename) {
-            if let Some(script) = words[head + 1..].iter().find(|w| !w.starts_with('-')) {
-                paths.push((*script).to_owned());
-            }
+        if SHELL_INTERPRETERS.contains(&basename)
+            && let Some(script) = words[head + 1..].iter().find(|w| !w.starts_with('-'))
+        {
+            paths.push((*script).to_owned());
         }
     }
 
@@ -221,7 +221,7 @@ pub fn extract_executed_paths(command: &str) -> Vec<String> {
 /// first word is a command position. Mirrors `engine/prefilter.rs`'s split set.
 fn split_on_shell_operators(command: &str) -> impl Iterator<Item = &str> {
     command
-        .split(|c| matches!(c, ';' | '&' | '|' | '\n' | '(' | ')'))
+        .split([';', '&', '|', '\n', '(', ')'])
         .map(str::trim)
         .filter(|s| !s.is_empty())
 }

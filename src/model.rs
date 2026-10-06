@@ -48,6 +48,7 @@ impl From<Category> for String {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Rule {
     pub name: String,
     pub pattern: String,
@@ -64,14 +65,83 @@ pub struct Rule {
     pub window: Option<String>,
     #[serde(default, skip_serializing_if = "RuleExamples::is_empty")]
     pub examples: RuleExamples,
+    /// Exact tool names the rule applies to; empty means the tools `check` scans today.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<String>,
+    /// The `tool_input` field the pattern is matched against; unset means the fields `check` scans today.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+    /// A regex the hook payload's `cwd` must match for the rule to apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+}
+
+impl Rule {
+    /// Whether the rule names a tool, a field or a cwd, and so runs outside the `RegexSet`.
+    #[must_use]
+    pub fn is_scoped(&self) -> bool {
+        !self.tools.is_empty() || self.field.is_some() || self.cwd.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RuleExamples {
     #[serde(default)]
-    pub block: Vec<String>,
+    pub block: Vec<Example>,
     #[serde(default)]
-    pub allow: Vec<String>,
+    pub allow: Vec<Example>,
+}
+
+/// One rule example: the matched text alone, or the text with the call it arrives in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Example {
+    Text(String),
+    Call(ExampleCall),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExampleCall {
+    /// The text the rule's field carries.
+    pub input: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+}
+
+impl Example {
+    #[must_use]
+    pub fn input(&self) -> &str {
+        match self {
+            Self::Text(t) => t,
+            Self::Call(c) => &c.input,
+        }
+    }
+
+    #[must_use]
+    pub fn tool(&self) -> Option<&str> {
+        match self {
+            Self::Text(_) => None,
+            Self::Call(c) => c.tool.as_deref(),
+        }
+    }
+
+    #[must_use]
+    pub fn cwd(&self) -> Option<&str> {
+        match self {
+            Self::Text(_) => None,
+            Self::Call(c) => c.cwd.as_deref(),
+        }
+    }
+}
+
+impl From<&str> for Example {
+    fn from(s: &str) -> Self {
+        Self::Text(s.to_owned())
+    }
 }
 
 impl RuleExamples {
@@ -183,7 +253,6 @@ impl Decision {
     }
 
     /// Create a Block or Warn decision from a rule, based on its severity.
-    #[must_use]
     pub fn from_rule(rule: &Rule) -> Self {
         match rule.severity {
             Severity::Block => Self::Block {
@@ -194,7 +263,6 @@ impl Decision {
                 rule: rule.name.clone(),
                 message: rule.message.clone(),
             },
-            _ => Self::Allow,
         }
     }
 }
@@ -212,9 +280,37 @@ pub struct RuleBuilder {
     test_allow: Option<String>,
     window: Option<String>,
     examples: RuleExamples,
+    tools: Vec<String>,
+    field: Option<String>,
+    cwd: Option<String>,
 }
 
 impl RuleBuilder {
+    #[must_use]
+    pub fn tools<I: IntoIterator<Item = S>, S: Into<String>>(mut self, tools: I) -> Self {
+        self.tools = tools.into_iter().map(Into::into).collect();
+        self
+    }
+    #[must_use]
+    pub fn field(mut self, f: impl Into<String>) -> Self {
+        self.field = Some(f.into());
+        self
+    }
+    #[must_use]
+    pub fn cwd(mut self, c: impl Into<String>) -> Self {
+        self.cwd = Some(c.into());
+        self
+    }
+    #[must_use]
+    pub fn example_block(mut self, e: Example) -> Self {
+        self.examples.block.push(e);
+        self
+    }
+    #[must_use]
+    pub fn example_allow(mut self, e: Example) -> Self {
+        self.examples.allow.push(e);
+        self
+    }
     #[must_use]
     pub fn window(mut self, w: impl Into<String>) -> Self {
         self.window = Some(w.into());
@@ -257,6 +353,9 @@ impl RuleBuilder {
             test_allow: self.test_allow,
             window: self.window,
             examples: self.examples,
+            tools: self.tools,
+            field: self.field,
+            cwd: self.cwd,
         }
     }
 }
@@ -275,19 +374,22 @@ impl Rule {
             test_allow: None,
             window: None,
             examples: RuleExamples::default(),
+            tools: Vec::new(),
+            field: None,
+            cwd: None,
         }
     }
 }
 
 /// User config file (shikumi convention: ~/.config/guardrail/guardrail.yaml).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GuardrailConfig {
     /// Toggle entire categories. Missing = enabled.
     #[serde(default)]
     pub categories: BTreeMap<String, bool>,
-    /// Additional rules merged with compiled-in defaults.
-    #[serde(default)]
+    /// Additional rules merged with compiled-in defaults; an entry that is not a rule is skipped on its own.
+    #[serde(default, deserialize_with = "valid_rules")]
     pub extra_rules: Vec<Rule>,
     /// Compiled-in rule names to disable.
     #[serde(default)]
@@ -305,7 +407,7 @@ pub struct GuardrailConfig {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PrefilterSpec {
     #[serde(default)]
     pub commands: Vec<String>,
@@ -318,7 +420,7 @@ pub struct PrefilterSpec {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PrefilterOverrides {
     #[serde(default)]
     pub extra_commands: Vec<String>,
@@ -331,7 +433,7 @@ pub struct PrefilterOverrides {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChangeWindow {
     pub name: String,
     pub tag: String,
@@ -339,6 +441,8 @@ pub struct ChangeWindow {
     pub end: String,
 }
 
+/// The run-time window file envelope. It stays open to other keys: the writer (e.g. `carve windows sync`)
+/// adds its own metadata, and each window entry is still parsed strictly on its own.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeWindowFile {
@@ -347,13 +451,39 @@ pub struct ChangeWindowFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ToolInputLimit {
     pub name: String,
     pub tools: Vec<String>,
     pub field: String,
     pub max_chars: usize,
     pub message: String,
+}
+
+fn valid_rules<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Rule>, D::Error> {
+    let entries = Vec::<serde_yaml::Value>::deserialize(d)?;
+    Ok(entries
+        .into_iter()
+        .filter_map(|v| serde_yaml::from_value(v).ok())
+        .collect())
+}
+
+/// Each entry of a rule list that is not a rule, named with why.
+#[must_use]
+pub fn rule_entry_problems(entries: &[serde_yaml::Value]) -> Vec<String> {
+    entries
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| {
+            serde_yaml::from_value::<Rule>(v.clone()).err().map(|e| {
+                let name = v
+                    .get("name")
+                    .and_then(serde_yaml::Value::as_str)
+                    .unwrap_or("<unnamed>");
+                format!("entry {i} ({name}): {e}")
+            })
+        })
+        .collect()
 }
 
 impl GuardrailConfig {
@@ -794,11 +924,11 @@ mod tests {
 
     #[test]
     fn config_camel_case_field_names() {
-        let yaml = r#"
+        let yaml = r"
 disabledRules:
   - some-rule
 extraRules: []
-"#;
+";
         let config: GuardrailConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.disabled_rules, vec!["some-rule"]);
     }
@@ -852,20 +982,20 @@ extraRules: []
 
     #[test]
     fn rule_missing_required_field_yaml() {
-        let yaml = r#"
+        let yaml = r"
 - name: incomplete
   severity: block
-"#;
+";
         let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err(), "missing required fields should fail");
     }
 
     #[test]
     fn config_category_toggles_accept_any_suite_category() {
-        let yaml = r#"
+        let yaml = r"
 categories:
   my-suite: false
-"#;
+";
         let config: GuardrailConfig = serde_yaml::from_str(yaml).unwrap();
         assert!(!config.is_category_enabled(&cat("my-suite")));
         assert!(config.is_category_enabled(&cat("git")));
@@ -881,7 +1011,81 @@ extraRules:
     message: "nope"
     category: git
 "#;
-        let result: Result<GuardrailConfig, _> = serde_yaml::from_str(yaml);
-        assert!(result.is_err(), "invalid nested rule should fail");
+        let (config, problems) = crate::config::parse_user_config(yaml).unwrap();
+        assert!(config.extra_rules.is_empty(), "the invalid rule is skipped");
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("entry 0 (bad)"), "{problems:?}");
+    }
+
+    #[test]
+    fn an_invalid_extra_rule_is_refused_alone() {
+        let yaml = r"
+extraRules:
+  - {name: bad, pattern: x, severity: block, message: m, category: git, exmaples: {}}
+  - {name: good, pattern: y, severity: block, message: m, category: git}
+disabledRules: [rm-rf-root]
+";
+        let (config, problems) = crate::config::parse_user_config(yaml).unwrap();
+        assert_eq!(config.extra_rules.len(), 1);
+        assert_eq!(config.extra_rules[0].name, "good");
+        assert_eq!(config.disabled_rules, ["rm-rf-root"]);
+        assert!(problems[0].contains("exmaples"), "{problems:?}");
+    }
+
+    #[test]
+    fn an_unknown_key_is_refused_alone() {
+        let yaml = "disabledRule: [x]\ndisabledRules: [y]\nprefilter: {extraCommand: [z]}\n";
+        assert!(serde_yaml::from_str::<GuardrailConfig>(yaml).is_err());
+        let (config, problems) = crate::config::parse_user_config(yaml).unwrap();
+        assert_eq!(config.disabled_rules, ["y"]);
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert!(problems.iter().any(|p| p.contains("disabledRule")));
+        assert!(problems.iter().any(|p| p.contains("key prefilter")));
+    }
+
+    #[test]
+    fn every_config_struct_refuses_an_unknown_key() {
+        assert!(
+            serde_yaml::from_str::<Rule>(
+                "{name: a, pattern: b, severity: block, message: c, category: d, extra: 1}"
+            )
+            .is_err()
+        );
+        assert!(serde_yaml::from_str::<RuleExamples>("{block: [], deny: []}").is_err());
+        assert!(serde_yaml::from_str::<ExampleCall>("{input: a, tools: b}").is_err());
+        assert!(
+            serde_yaml::from_str::<ToolInputLimit>(
+                "{name: a, tools: [b], field: c, maxChars: 1, message: d, max: 2}"
+            )
+            .is_err()
+        );
+        assert!(
+            serde_yaml::from_str::<ChangeWindow>("{name: a, tag: b, start: c, end: d, ticket: e}")
+                .is_err()
+        );
+        assert!(serde_yaml::from_str::<PrefilterOverrides>("{extraCommand: []}").is_err());
+        assert!(serde_yaml::from_str::<PrefilterSpec>("{command: []}").is_err());
+    }
+
+    #[test]
+    fn a_window_file_envelope_stays_open_to_its_writer() {
+        let f: ChangeWindowFile = serde_yaml::from_str(
+            "{changeWindows: [], generatedAt: '2026-10-06T00:00:00Z', source: jira}",
+        )
+        .unwrap();
+        assert!(f.change_windows.is_empty());
+    }
+
+    #[test]
+    fn examples_are_text_or_a_call() {
+        let rule: Rule = serde_yaml::from_str(
+            "{name: a, pattern: b, severity: block, message: c, category: d, tools: [Write], field: file_path, cwd: '/x/', examples: {block: [b, {input: b, tool: Edit, cwd: /x/}]}}",
+        )
+        .unwrap();
+        assert_eq!(rule.examples.block[0], Example::Text("b".into()));
+        assert_eq!(rule.examples.block[1].tool(), Some("Edit"));
+        assert!(rule.is_scoped());
+        let back: Rule = serde_yaml::from_str(&serde_yaml::to_string(&rule).unwrap()).unwrap();
+        assert_eq!(back, rule);
     }
 }

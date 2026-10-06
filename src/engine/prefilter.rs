@@ -29,6 +29,9 @@ impl PrefixPrefilter {
         }
     }
 
+    /// # Panics
+    ///
+    /// Only if the compiled-in `rules/prefilter.yaml` does not parse, which a unit test rules out.
     #[must_use]
     pub fn default_spec() -> PrefilterSpec {
         serde_yaml::from_str(DEFAULT_SPEC_YAML).expect("rules/prefilter.yaml is valid")
@@ -78,14 +81,12 @@ impl Prefilter for PrefixPrefilter {
         // whole command: `cd /tmp && rm -rf /` puts `rm` at word 4, and a scan
         // over the whole command let it skip the engine (confirmed live,
         // 2026-07-27).
-        let has_command = command
-            .split(|c| c == ';' || c == '&' || c == '|' || c == '\n')
-            .any(|segment| {
-                segment.split_whitespace().take(3).any(|word| {
-                    self.commands.contains(word)
-                        || self.commands.iter().any(|p| word.starts_with(p.as_str()))
-                })
-            });
+        let has_command = command.split([';', '&', '|', '\n']).any(|segment| {
+            segment.split_whitespace().take(3).any(|word| {
+                self.commands.contains(word)
+                    || self.commands.iter().any(|p| word.starts_with(p.as_str()))
+            })
+        });
         if has_command {
             return false;
         }

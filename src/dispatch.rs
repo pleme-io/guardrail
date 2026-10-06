@@ -281,6 +281,7 @@ pub fn dispatch(name: &str, raw: &str, table: &HookTable, builtins: &dyn Builtin
     let input: HookInput = serde_json::from_value(payload.clone()).unwrap_or(HookInput {
         tool_name: None,
         tool_input: None,
+        cwd: None,
     });
     let subject = subject(event, &payload);
 

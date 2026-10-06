@@ -11,9 +11,10 @@ use crate::model::{GuardrailConfig, Rule};
 /// via the XDG Base Directory Specification.
 #[must_use]
 pub fn xdg_dir(env_var: &str, fallback_suffix: &str) -> PathBuf {
-    env::var(env_var).map(PathBuf::from).unwrap_or_else(|_| {
-        PathBuf::from(env::var("HOME").unwrap_or_default()).join(fallback_suffix)
-    })
+    env::var(env_var).map_or_else(
+        |_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(fallback_suffix),
+        PathBuf::from,
+    )
 }
 
 const DEFAULTS_YAML: &str = include_str!("../rules/defaults.yaml");
@@ -80,12 +81,58 @@ impl RuleProvider for DirectoryProvider {
         for path in paths {
             let content =
                 fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-            let batch: Vec<Rule> = serde_yaml::from_str(&content)
-                .with_context(|| format!("parsing {}", path.display()))?;
+            let (batch, _) =
+                parse_rule_list(&content).with_context(|| format!("parsing {}", path.display()))?;
             rules.extend(batch);
         }
         Ok(rules)
     }
+}
+
+impl DirectoryProvider {
+    /// Every suite entry that is not a rule, by file. Such an entry is skipped at run time.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the directory or a suite cannot be read or is not a YAML list.
+    pub fn problems(&self) -> anyhow::Result<Vec<String>> {
+        let mut problems = Vec::new();
+        if !self.dir.is_dir() {
+            return Ok(problems);
+        }
+        let mut paths: Vec<_> = fs::read_dir(&self.dir)?
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "yaml" || e == "yml"))
+            .collect();
+        paths.sort();
+        for path in paths {
+            let content =
+                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+            let (_, bad) =
+                parse_rule_list(&content).with_context(|| format!("parsing {}", path.display()))?;
+            problems.extend(bad.into_iter().map(|b| format!("{}: {b}", path.display())));
+        }
+        Ok(problems)
+    }
+}
+
+/// A suite: the entries that are rules, and each entry that is not, named with why.
+///
+/// # Errors
+///
+/// Returns an error if the text is not a YAML list.
+pub fn parse_rule_list(text: &str) -> anyhow::Result<(Vec<Rule>, Vec<String>)> {
+    let entries: Vec<serde_yaml::Value> = match serde_yaml::from_str(text)? {
+        serde_yaml::Value::Null => Vec::new(),
+        v => serde_yaml::from_value(v)?,
+    };
+    let problems = crate::model::rule_entry_problems(&entries);
+    let rules = entries
+        .into_iter()
+        .filter_map(|v| serde_yaml::from_value(v).ok())
+        .collect();
+    Ok((rules, problems))
 }
 
 /// In-memory rule provider for testing.
@@ -183,9 +230,62 @@ pub fn load_user_config(path: &Path) -> anyhow::Result<GuardrailConfig> {
     if !path.exists() {
         return Ok(GuardrailConfig::default());
     }
+    load_user_config_checked(path).map(|(c, _)| c)
+}
+
+/// Load user config and name every key or rule entry that was refused.
+///
+/// A key that is unknown or does not parse is dropped on its own, and an
+/// `extraRules` entry that is not a rule is skipped on its own; the rest of the
+/// file still applies. `guardrail validate` fails on any of them.
+///
+/// # Errors
+///
+/// Returns an error if the file exists but is not a YAML mapping.
+pub fn load_user_config_checked(path: &Path) -> anyhow::Result<(GuardrailConfig, Vec<String>)> {
+    if !path.exists() {
+        return Ok((GuardrailConfig::default(), Vec::new()));
+    }
     let content =
         fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    serde_yaml::from_str(&content).with_context(|| format!("parsing {}", path.display()))
+    parse_user_config(&content).with_context(|| format!("parsing {}", path.display()))
+}
+
+/// Parse guardrail.yaml text, refusing per key and per rule entry.
+///
+/// # Errors
+///
+/// Returns an error if the text is not a YAML mapping.
+pub fn parse_user_config(text: &str) -> anyhow::Result<(GuardrailConfig, Vec<String>)> {
+    let map = match serde_yaml::from_str::<serde_yaml::Value>(text)? {
+        serde_yaml::Value::Null => serde_yaml::Mapping::new(),
+        serde_yaml::Value::Mapping(m) => m,
+        _ => anyhow::bail!("guardrail.yaml is not a mapping"),
+    };
+    let mut kept = serde_yaml::Mapping::new();
+    let mut problems = Vec::new();
+    for (k, v) in map {
+        let mut one = serde_yaml::Mapping::new();
+        one.insert(k.clone(), v.clone());
+        let key = k.as_str().unwrap_or("<non-string key>").to_owned();
+        match serde_yaml::from_value::<GuardrailConfig>(serde_yaml::Value::Mapping(one)) {
+            Ok(_) => {
+                if key == "extraRules"
+                    && let serde_yaml::Value::Sequence(entries) = &v
+                {
+                    problems.extend(
+                        crate::model::rule_entry_problems(entries)
+                            .into_iter()
+                            .map(|p| format!("extraRules {p}")),
+                    );
+                }
+                kept.insert(k, v);
+            }
+            Err(e) => problems.push(format!("key {key}: {e}")),
+        }
+    }
+    let config = serde_yaml::from_value(serde_yaml::Value::Mapping(kept))?;
+    Ok((config, problems))
 }
 
 /// Legacy convenience: merge defaults + user config.

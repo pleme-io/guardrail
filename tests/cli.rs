@@ -98,7 +98,7 @@ fn check_allows_empty_input() {
     Command::cargo_bin("guardrail")
         .unwrap()
         .args(["check"])
-        .write_stdin(r#"{}"#)
+        .write_stdin(r"{}")
         .assert()
         .success();
 }
@@ -429,10 +429,10 @@ fn validate_with_valid_config() {
     fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("guardrail.yaml"),
-        r#"
+        r"
 disabledRules:
   - rm-rf-root
-"#,
+",
     )
     .unwrap();
 
@@ -560,10 +560,10 @@ fn disabled_rule_allows_previously_blocked() {
     fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("guardrail.yaml"),
-        r#"
+        r"
 disabledRules:
   - rm-rf-root
-"#,
+",
     )
     .unwrap();
 
@@ -583,10 +583,10 @@ fn disabled_category_allows_all_rules_in_category() {
     fs::create_dir_all(&config_dir).unwrap();
     fs::write(
         config_dir.join("guardrail.yaml"),
-        r#"
+        r"
 categories:
   filesystem: false
-"#,
+",
     )
     .unwrap();
 
@@ -695,7 +695,7 @@ fn hook_search_advise_matches_the_standalone_subcommand_byte_for_byte() {
 #[test]
 fn hook_search_nudge_and_input_limit_and_mint_advise_actions() {
     let (config, cache) = hook_config(
-        r#"
+        r"
 toolInputLimits:
   - name: short-comment
     tools: [mcp__x__comment]
@@ -711,7 +711,7 @@ hooks:
   PostToolUse:
     - action: mintAdvise
       matcher: Bash|Write
-"#,
+",
     );
     guardrail_in(&config, &cache, &["hook", "PreToolUse"])
         .write_stdin(r#"{"tool_name":"Grep","tool_input":{"pattern":"x"}}"#)
@@ -827,4 +827,179 @@ fn validate_does_not_fail_on_an_unread_window_file() {
         .assert()
         .success()
         .stderr(predicate::str::contains("window file not read"));
+}
+
+const SCOPED: &str = r#"
+extraRules:
+  - name: akl-force-push
+    pattern: 'git\s+push\b.*(--force|\s-f\b)'
+    severity: block
+    message: "no force push in akeylesslabs"
+    category: git
+    cwd: "/akeylesslabs/"
+    examples:
+      block: [{input: "git push -f origin x", cwd: "/c/akeylesslabs/r"}]
+      allow: [{input: "git push -f origin x", cwd: "/c/pleme-io/r"}]
+  - name: claude-files
+    pattern: '^/Users/[^/]+/\.claude/(skills|CLAUDE\.md|settings\.json)'
+    severity: block
+    message: "edit the blackmatter source"
+    category: claude
+    tools: [Write, Edit]
+    field: file_path
+    examples:
+      block: [/Users/x/.claude/settings.json, {input: /Users/x/.claude/skills/a/SKILL.md, tool: Edit}]
+      allow: [/Users/x/code/a.rs]
+  - name: ai-trailer
+    pattern: '(?i)co-authored-by:\s*claude|generated with \[?claude'
+    severity: block
+    message: "no AI attribution"
+    category: attribution
+    tools: [mcp__github__create_pull_request, mcp__github__update_pull_request]
+    field: body
+    examples:
+      block: ["Co-Authored-By: Claude <noreply@anthropic.com>"]
+      allow: ["fixes the reconnect"]
+"#;
+
+#[test]
+fn a_cwd_scoped_rule_blocks_only_under_its_cwd() {
+    let (config, cache) = hook_config(SCOPED);
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(r#"{"tool_name":"Bash","cwd":"/Users/x/code/github/akeylesslabs/repo","tool_input":{"command":"git push --force-with-lease origin feat"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("akl-force-push"));
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(r#"{"tool_name":"Bash","cwd":"/Users/x/code/github/pleme-io/repo","tool_input":{"command":"git push --force-with-lease origin feat"}}"#)
+        .assert()
+        .success();
+}
+
+#[test]
+fn a_field_scoped_rule_blocks_write_and_mcp_calls() {
+    let (config, cache) = hook_config(SCOPED);
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(r#"{"tool_name":"Write","tool_input":{"file_path":"/Users/x/.claude/CLAUDE.md","content":"x"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("claude-files"));
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(r#"{"tool_name":"mcp__github__create_pull_request","tool_input":{"title":"t","body":"x\n\nGenerated with [Claude Code](https://claude.com)"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("ai-trailer"));
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(
+            r#"{"tool_name":"Read","tool_input":{"file_path":"/Users/x/.claude/CLAUDE.md"}}"#,
+        )
+        .assert()
+        .success();
+}
+
+#[test]
+fn validate_runs_scoped_examples_and_checks_hook_registration() {
+    let (config, cache) = hook_config(SCOPED);
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .success();
+    guardrail_in(
+        &config,
+        &cache,
+        &["validate", "--hooked-tools", "Bash,Write,Edit"],
+    )
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains(
+        "not registered for tool mcp__github__create_pull_request",
+    ));
+    guardrail_in(
+        &config,
+        &cache,
+        &[
+            "validate",
+            "--hooked-tools",
+            "Bash,Write,Edit,mcp__github__create_pull_request,mcp__github__update_pull_request",
+        ],
+    )
+    .assert()
+    .success();
+    let broken = SCOPED.replace("cwd: \"/c/pleme-io/r\"", "cwd: \"/c/akeylesslabs/q\"");
+    let (config, cache) = hook_config(&broken);
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "akl-force-push: allow example matches",
+        ));
+}
+
+#[test]
+fn validate_refuses_an_unknown_key_and_check_keeps_the_rest() {
+    let (config, cache) = hook_config("disabledRule: [rm-rf-root]\ncategories: {}\n");
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("key disabledRule"));
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(RM_ROOT)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("rm-rf-root"));
+}
+
+#[test]
+fn validate_refuses_an_unknown_key_in_a_suite_entry_and_keeps_its_siblings() {
+    let (config, cache) = hook_config("categories: {}\n");
+    let rules_d = config.path().join("guardrail/rules.d");
+    fs::create_dir_all(&rules_d).unwrap();
+    fs::write(
+        rules_d.join("team.yaml"),
+        "- {name: typo-rule, pattern: 'zap\\s+all', severity: block, message: m, category: team, test_blok: zap all}\n- {name: kept-rule, pattern: 'zap\\s+one', severity: block, message: m, category: team}\n",
+    )
+    .unwrap();
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("entry 0 (typo-rule)"));
+    guardrail_in(&config, &cache, &["list"])
+        .assert()
+        .success()
+        .stderr(
+            predicate::str::contains("kept-rule").and(predicate::str::contains("typo-rule").not()),
+        );
+}
+
+#[test]
+fn schema_lists_every_rule_field() {
+    Command::cargo_bin("guardrail")
+        .unwrap()
+        .args(["schema"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(r#""cwd""#)
+                .and(predicate::str::contains(r#""changeWindowFiles""#)),
+        );
+}
+
+#[test]
+fn an_invalid_entry_in_a_window_file_never_opens_while_its_siblings_do() {
+    let dir = TempDir::new().unwrap();
+    windowed_config(&dir, "windows.json");
+    fs::write(
+        dir.path().join("guardrail/windows.json"),
+        r#"{"generatedAt":"x","changeWindows":[{"name":"bad","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z","extra":1},{"name":"ASM-2","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z"}]}"#,
+    )
+    .unwrap();
+    Command::cargo_bin("guardrail")
+        .unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(LIVE_CORDON)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "allowed inside change window ASM-2",
+        ));
 }

@@ -8,6 +8,8 @@ pub mod journal;
 pub mod limits;
 pub mod model;
 pub mod production;
+pub mod schema;
+pub mod scope;
 pub mod testing;
 pub mod windows;
 
@@ -25,5 +27,6 @@ pub use engine::{
     SqlCommentStripper,
 };
 pub use model::{
-    Category, Decision, GuardrailConfig, ParseEnumError, Rule, RuleBuilder, RuleExamples, Severity,
+    Category, Decision, Example, ExampleCall, GuardrailConfig, ParseEnumError, Rule, RuleBuilder,
+    RuleExamples, Severity,
 };
