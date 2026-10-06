@@ -156,7 +156,6 @@ impl<N: Normalizer, P: Prefilter> RuleEngine for RegexEngine<N, P> {
 mod tests {
     use super::*;
     use crate::config;
-    use crate::model::Category;
 
     fn engine() -> RegexEngine {
         RegexEngine::new(config::default_rules()).unwrap()
@@ -1167,10 +1166,10 @@ mod tests {
 
     #[test]
     fn category_display() {
-        assert_eq!(Category::Filesystem.to_string(), "filesystem");
-        assert_eq!(Category::Git.to_string(), "git");
-        assert_eq!(Category::Cloud.to_string(), "cloud");
-        assert_eq!(Category::Nosql.to_string(), "nosql");
+        assert_eq!(crate::model::cat("filesystem").to_string(), "filesystem");
+        assert_eq!(crate::model::cat("git").to_string(), "git");
+        assert_eq!(crate::model::cat("cloud").to_string(), "cloud");
+        assert_eq!(crate::model::cat("nosql").to_string(), "nosql");
     }
 
     // -- PrefixPrefilter::default_spec (rules/prefilter.yaml) ---------

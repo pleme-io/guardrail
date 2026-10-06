@@ -99,15 +99,15 @@ mod tests {
     #[test]
     fn open_only_inside_a_window_with_the_tag() {
         let ws = [w(
-            "akeyless-production",
+            "team-production",
             "2026-10-11T06:00:00Z",
             "2026-10-11T18:00:00Z",
         )];
         let at = |s: &str| parse_utc(s).unwrap();
-        assert!(open_window(&ws, "akeyless-production", at("2026-10-11T06:00:00Z")).is_some());
-        assert!(open_window(&ws, "akeyless-production", at("2026-10-11T17:59:59Z")).is_some());
-        assert!(open_window(&ws, "akeyless-production", at("2026-10-11T18:00:00Z")).is_none());
-        assert!(open_window(&ws, "akeyless-production", at("2026-10-11T05:59:59Z")).is_none());
+        assert!(open_window(&ws, "team-production", at("2026-10-11T06:00:00Z")).is_some());
+        assert!(open_window(&ws, "team-production", at("2026-10-11T17:59:59Z")).is_some());
+        assert!(open_window(&ws, "team-production", at("2026-10-11T18:00:00Z")).is_none());
+        assert!(open_window(&ws, "team-production", at("2026-10-11T05:59:59Z")).is_none());
         assert!(open_window(&ws, "other", at("2026-10-11T12:00:00Z")).is_none());
     }
 

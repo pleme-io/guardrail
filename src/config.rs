@@ -132,7 +132,7 @@ pub fn resolve(
 
     let filtered = all_rules
         .into_iter()
-        .filter(|r| config.is_category_enabled(r.category))
+        .filter(|r| config.is_category_enabled(&r.category))
         .filter(|r| !config.disabled_rules.contains(&r.name))
         .collect();
 
@@ -236,17 +236,18 @@ mod tests {
     #[test]
     fn defaults_have_all_categories() {
         let rules = DefaultsProvider.rules().unwrap();
-        let cats: std::collections::BTreeSet<Category> = rules.iter().map(|r| r.category).collect();
+        let cats: std::collections::BTreeSet<Category> =
+            rules.iter().map(|r| r.category.clone()).collect();
         for cat in [
-            Category::Filesystem,
-            Category::Git,
-            Category::Database,
-            Category::Kubernetes,
-            Category::Nix,
-            Category::Docker,
-            Category::Secrets,
-            Category::Terraform,
-            Category::Flux,
+            crate::model::cat("filesystem"),
+            crate::model::cat("git"),
+            crate::model::cat("database"),
+            crate::model::cat("kubernetes"),
+            crate::model::cat("nix"),
+            crate::model::cat("docker"),
+            crate::model::cat("secrets"),
+            crate::model::cat("terraform"),
+            crate::model::cat("flux"),
         ] {
             assert!(cats.contains(&cat), "missing category: {cat:?}");
         }
@@ -257,8 +258,11 @@ mod tests {
     #[test]
     fn directory_provider_loads_yaml() {
         let dir = TempDir::new().unwrap();
-        let yaml =
-            serde_yaml::to_string(&vec![test_rule("custom-fs", Category::Filesystem)]).unwrap();
+        let yaml = serde_yaml::to_string(&vec![test_rule(
+            "custom-fs",
+            crate::model::cat("filesystem"),
+        )])
+        .unwrap();
         fs::write(dir.path().join("custom.yaml"), &yaml).unwrap();
 
         let provider = DirectoryProvider {
@@ -274,12 +278,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("a.yaml"),
-            serde_yaml::to_string(&vec![test_rule("rule-a", Category::Git)]).unwrap(),
+            serde_yaml::to_string(&vec![test_rule("rule-a", crate::model::cat("git"))]).unwrap(),
         )
         .unwrap();
         fs::write(
             dir.path().join("b.yaml"),
-            serde_yaml::to_string(&vec![test_rule("rule-b", Category::Docker)]).unwrap(),
+            serde_yaml::to_string(&vec![test_rule("rule-b", crate::model::cat("docker"))]).unwrap(),
         )
         .unwrap();
 
@@ -295,12 +299,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("z.yaml"),
-            serde_yaml::to_string(&vec![test_rule("z-rule", Category::Git)]).unwrap(),
+            serde_yaml::to_string(&vec![test_rule("z-rule", crate::model::cat("git"))]).unwrap(),
         )
         .unwrap();
         fs::write(
             dir.path().join("a.yaml"),
-            serde_yaml::to_string(&vec![test_rule("a-rule", Category::Git)]).unwrap(),
+            serde_yaml::to_string(&vec![test_rule("a-rule", crate::model::cat("git"))]).unwrap(),
         )
         .unwrap();
 
@@ -335,7 +339,7 @@ mod tests {
     fn mock_provider() {
         let provider = MockProvider {
             label: "test".into(),
-            rules: vec![test_rule("mock", Category::Filesystem)],
+            rules: vec![test_rule("mock", crate::model::cat("filesystem"))],
         };
         assert_eq!(provider.name(), "test");
         assert_eq!(provider.rules().unwrap().len(), 1);
@@ -347,11 +351,11 @@ mod tests {
     fn resolve_merges_multiple_providers() {
         let p1 = MockProvider {
             label: "a".into(),
-            rules: vec![test_rule("rule-a", Category::Filesystem)],
+            rules: vec![test_rule("rule-a", crate::model::cat("filesystem"))],
         };
         let p2 = MockProvider {
             label: "b".into(),
-            rules: vec![test_rule("rule-b", Category::Git)],
+            rules: vec![test_rule("rule-b", crate::model::cat("git"))],
         };
         let config = GuardrailConfig::default();
         let rules = resolve(&[&p1, &p2], &config).unwrap();
@@ -363,12 +367,12 @@ mod tests {
         let p = MockProvider {
             label: "test".into(),
             rules: vec![
-                test_rule("fs-rule", Category::Filesystem),
-                test_rule("git-rule", Category::Git),
+                test_rule("fs-rule", crate::model::cat("filesystem")),
+                test_rule("git-rule", crate::model::cat("git")),
             ],
         };
         let mut cats = BTreeMap::new();
-        cats.insert(Category::Git, false);
+        cats.insert("git".to_owned(), false);
         let config = GuardrailConfig {
             categories: cats,
             ..Default::default()
@@ -383,8 +387,8 @@ mod tests {
         let p = MockProvider {
             label: "test".into(),
             rules: vec![
-                test_rule("keep", Category::Filesystem),
-                test_rule("drop", Category::Filesystem),
+                test_rule("keep", crate::model::cat("filesystem")),
+                test_rule("drop", crate::model::cat("filesystem")),
             ],
         };
         let config = GuardrailConfig {
@@ -403,7 +407,7 @@ mod tests {
             rules: vec![],
         };
         let config = GuardrailConfig {
-            extra_rules: vec![test_rule("extra", Category::Secrets)],
+            extra_rules: vec![test_rule("extra", crate::model::cat("secrets"))],
             ..Default::default()
         };
         let rules = resolve(&[&p], &config).unwrap();
@@ -418,10 +422,10 @@ mod tests {
             rules: vec![],
         };
         let mut cats = BTreeMap::new();
-        cats.insert(Category::Secrets, false);
+        cats.insert("secrets".to_owned(), false);
         let config = GuardrailConfig {
             categories: cats,
-            extra_rules: vec![test_rule("extra-secret", Category::Secrets)],
+            extra_rules: vec![test_rule("extra-secret", crate::model::cat("secrets"))],
             ..Default::default()
         };
         let rules = resolve(&[&p], &config).unwrap();
@@ -452,18 +456,6 @@ mod tests {
     // ─── Suite file loading ──────────────────────────────────────
 
     #[test]
-    fn akeyless_suite_parses() {
-        let yaml = include_str!("../rules/akeyless.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
-        assert!(
-            rules.len() >= 30,
-            "expected 30+ akeyless rules, got {}",
-            rules.len()
-        );
-        assert!(rules.iter().all(|r| r.category == Category::Akeyless));
-    }
-
-    #[test]
     fn aws_suite_parses() {
         let yaml = include_str!("../rules/aws.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
@@ -472,7 +464,11 @@ mod tests {
             "expected 20+ aws rules, got {}",
             rules.len()
         );
-        assert!(rules.iter().all(|r| r.category == Category::Cloud));
+        assert!(
+            rules
+                .iter()
+                .all(|r| r.category == crate::model::cat("cloud"))
+        );
     }
 
     #[test]
@@ -494,7 +490,11 @@ mod tests {
         let yaml = include_str!("../rules/process.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
         assert!(rules.len() >= 5);
-        assert!(rules.iter().all(|r| r.category == Category::Process));
+        assert!(
+            rules
+                .iter()
+                .all(|r| r.category == crate::model::cat("process"))
+        );
     }
 
     #[test]
@@ -502,7 +502,11 @@ mod tests {
         let yaml = include_str!("../rules/network.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
         assert!(rules.len() >= 5);
-        assert!(rules.iter().all(|r| r.category == Category::Network));
+        assert!(
+            rules
+                .iter()
+                .all(|r| r.category == crate::model::cat("network"))
+        );
     }
 
     #[test]
@@ -510,7 +514,11 @@ mod tests {
         let yaml = include_str!("../rules/nosql.yaml");
         let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
         assert!(rules.len() >= 5);
-        assert!(rules.iter().all(|r| r.category == Category::Nosql));
+        assert!(
+            rules
+                .iter()
+                .all(|r| r.category == crate::model::cat("nosql"))
+        );
     }
 
     #[test]
@@ -522,7 +530,11 @@ mod tests {
             "expected 35+ sql rules, got {}",
             rules.len()
         );
-        assert!(rules.iter().all(|r| r.category == Category::Database));
+        assert!(
+            rules
+                .iter()
+                .all(|r| r.category == crate::model::cat("database"))
+        );
     }
 
     // ─── load_user_config ─────────────────────────────────────
@@ -556,7 +568,7 @@ extraRules:
         )
         .unwrap();
         let config = load_user_config(&path).unwrap();
-        assert_eq!(config.categories.get(&Category::Git), Some(&false));
+        assert_eq!(config.categories.get("git"), Some(&false));
         assert_eq!(config.disabled_rules, vec!["rm-rf-root"]);
         assert_eq!(config.extra_rules.len(), 1);
         assert_eq!(config.extra_rules[0].name, "custom");
@@ -662,7 +674,8 @@ extraRules:
     #[test]
     fn directory_provider_ignores_non_yaml_files() {
         let dir = TempDir::new().unwrap();
-        let yaml = serde_yaml::to_string(&vec![test_rule("yaml-rule", Category::Git)]).unwrap();
+        let yaml =
+            serde_yaml::to_string(&vec![test_rule("yaml-rule", crate::model::cat("git"))]).unwrap();
         fs::write(dir.path().join("rules.yaml"), &yaml).unwrap();
         fs::write(dir.path().join("readme.md"), "# not a rule file").unwrap();
         fs::write(dir.path().join("rules.json"), "{}").unwrap();
@@ -679,7 +692,8 @@ extraRules:
     #[test]
     fn directory_provider_loads_yml_extension() {
         let dir = TempDir::new().unwrap();
-        let yaml = serde_yaml::to_string(&vec![test_rule("yml-rule", Category::Nix)]).unwrap();
+        let yaml =
+            serde_yaml::to_string(&vec![test_rule("yml-rule", crate::model::cat("nix"))]).unwrap();
         fs::write(dir.path().join("rules.yml"), &yaml).unwrap();
 
         let provider = DirectoryProvider {
@@ -718,7 +732,7 @@ extraRules:
             rules: vec![],
         };
         let config = GuardrailConfig {
-            extra_rules: vec![test_rule("extra", Category::Filesystem)],
+            extra_rules: vec![test_rule("extra", crate::model::cat("filesystem"))],
             disabled_rules: vec!["extra".into()],
             ..Default::default()
         };
@@ -731,15 +745,15 @@ extraRules:
         let p = MockProvider {
             label: "test".into(),
             rules: vec![
-                test_rule("fs", Category::Filesystem),
-                test_rule("git", Category::Git),
-                test_rule("k8s", Category::Kubernetes),
-                test_rule("db", Category::Database),
+                test_rule("fs", crate::model::cat("filesystem")),
+                test_rule("git", crate::model::cat("git")),
+                test_rule("k8s", crate::model::cat("kubernetes")),
+                test_rule("db", crate::model::cat("database")),
             ],
         };
         let mut cats = BTreeMap::new();
-        cats.insert(Category::Filesystem, false);
-        cats.insert(Category::Kubernetes, false);
+        cats.insert("filesystem".to_owned(), false);
+        cats.insert("kubernetes".to_owned(), false);
         let config = GuardrailConfig {
             categories: cats,
             ..Default::default()
@@ -749,7 +763,8 @@ extraRules:
         assert!(
             rules
                 .iter()
-                .all(|r| r.category != Category::Filesystem && r.category != Category::Kubernetes)
+                .all(|r| r.category != crate::model::cat("filesystem")
+                    && r.category != crate::model::cat("kubernetes"))
         );
     }
 
@@ -782,7 +797,7 @@ extraRules:
     fn resolve_fails_on_first_bad_provider() {
         let good = MockProvider {
             label: "good".into(),
-            rules: vec![test_rule("ok", Category::Git)],
+            rules: vec![test_rule("ok", crate::model::cat("git"))],
         };
         let config = GuardrailConfig::default();
         let result = resolve(&[&good, &FailingProvider], &config);
@@ -797,7 +812,6 @@ extraRules:
         let mut dupes = vec![];
         for yaml_str in [
             include_str!("../rules/defaults.yaml"),
-            include_str!("../rules/akeyless.yaml"),
             include_str!("../rules/aws.yaml"),
             include_str!("../rules/gcp.yaml"),
             include_str!("../rules/azure.yaml"),

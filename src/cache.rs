@@ -80,7 +80,7 @@ impl Fingerprinter for FsFingerprinter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Category, Rule, Severity};
+    use crate::model::{Rule, Severity};
     use tempfile::TempDir;
 
     fn test_rules() -> Vec<Rule> {
@@ -149,12 +149,12 @@ mod tests {
             Rule::builder("r1", "p1")
                 .severity(Severity::Block)
                 .message("m1")
-                .category(Category::Git)
+                .category(crate::model::cat("git"))
                 .build(),
             Rule::builder("r2", "p2")
                 .severity(Severity::Warn)
                 .message("m2")
-                .category(Category::Docker)
+                .category(crate::model::cat("docker"))
                 .build(),
         ];
 

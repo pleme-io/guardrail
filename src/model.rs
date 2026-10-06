@@ -12,24 +12,39 @@ pub enum Severity {
     Warn,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[non_exhaustive]
-pub enum Category {
-    Filesystem,
-    Git,
-    Database,
-    Kubernetes,
-    Nix,
-    Docker,
-    Secrets,
-    Terraform,
-    Cloud,
-    Flux,
-    Akeyless,
-    Process,
-    Network,
-    Nosql,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Category(String);
+
+impl Category {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for Category {
+    type Error = ParseEnumError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        let valid = !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+        if valid {
+            Ok(Self(s))
+        } else {
+            Err(ParseEnumError {
+                type_name: "Category",
+                value: s,
+            })
+        }
+    }
+}
+
+impl From<Category> for String {
+    fn from(c: Category) -> Self {
+        c.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +62,23 @@ pub struct Rule {
     pub test_allow: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub window: Option<String>,
+    #[serde(default, skip_serializing_if = "RuleExamples::is_empty")]
+    pub examples: RuleExamples,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuleExamples {
+    #[serde(default)]
+    pub block: Vec<String>,
+    #[serde(default)]
+    pub allow: Vec<String>,
+}
+
+impl RuleExamples {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.block.is_empty() && self.allow.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,48 +109,9 @@ impl fmt::Display for Severity {
     }
 }
 
-impl Category {
-    /// Returns a slice of all known categories.
-    #[must_use]
-    pub const fn all() -> &'static [Self] {
-        &[
-            Self::Filesystem,
-            Self::Git,
-            Self::Database,
-            Self::Kubernetes,
-            Self::Nix,
-            Self::Docker,
-            Self::Secrets,
-            Self::Terraform,
-            Self::Cloud,
-            Self::Flux,
-            Self::Akeyless,
-            Self::Process,
-            Self::Network,
-            Self::Nosql,
-        ]
-    }
-}
-
 impl fmt::Display for Category {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            Self::Filesystem => "filesystem",
-            Self::Git => "git",
-            Self::Database => "database",
-            Self::Kubernetes => "kubernetes",
-            Self::Nix => "nix",
-            Self::Docker => "docker",
-            Self::Secrets => "secrets",
-            Self::Terraform => "terraform",
-            Self::Cloud => "cloud",
-            Self::Flux => "flux",
-            Self::Akeyless => "akeyless",
-            Self::Process => "process",
-            Self::Network => "network",
-            Self::Nosql => "nosql",
-        };
-        f.write_str(s)
+        f.write_str(&self.0)
     }
 }
 
@@ -141,26 +134,7 @@ impl FromStr for Category {
     type Err = ParseEnumError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "filesystem" => Ok(Self::Filesystem),
-            "git" => Ok(Self::Git),
-            "database" => Ok(Self::Database),
-            "kubernetes" => Ok(Self::Kubernetes),
-            "nix" => Ok(Self::Nix),
-            "docker" => Ok(Self::Docker),
-            "secrets" => Ok(Self::Secrets),
-            "terraform" => Ok(Self::Terraform),
-            "cloud" => Ok(Self::Cloud),
-            "flux" => Ok(Self::Flux),
-            "akeyless" => Ok(Self::Akeyless),
-            "process" => Ok(Self::Process),
-            "network" => Ok(Self::Network),
-            "nosql" => Ok(Self::Nosql),
-            _ => Err(ParseEnumError {
-                type_name: "Category",
-                value: s.to_owned(),
-            }),
-        }
+        Self::try_from(s.to_owned())
     }
 }
 
@@ -237,6 +211,7 @@ pub struct RuleBuilder {
     test_block: Option<String>,
     test_allow: Option<String>,
     window: Option<String>,
+    examples: RuleExamples,
 }
 
 impl RuleBuilder {
@@ -281,12 +256,13 @@ impl RuleBuilder {
             test_block: self.test_block,
             test_allow: self.test_allow,
             window: self.window,
+            examples: self.examples,
         }
     }
 }
 
 impl Rule {
-    /// Create a builder with name and pattern. Defaults: Block, Filesystem, empty message.
+    /// Create a builder with name and pattern. Defaults: Block, category `general`, empty message.
     #[must_use]
     pub fn builder(name: impl Into<String>, pattern: impl Into<String>) -> RuleBuilder {
         RuleBuilder {
@@ -294,10 +270,11 @@ impl Rule {
             pattern: pattern.into(),
             severity: Severity::Block,
             message: String::new(),
-            category: Category::Filesystem,
+            category: Category("general".to_owned()),
             test_block: None,
             test_allow: None,
             window: None,
+            examples: RuleExamples::default(),
         }
     }
 }
@@ -308,7 +285,7 @@ impl Rule {
 pub struct GuardrailConfig {
     /// Toggle entire categories. Missing = enabled.
     #[serde(default)]
-    pub categories: BTreeMap<Category, bool>,
+    pub categories: BTreeMap<String, bool>,
     /// Additional rules merged with compiled-in defaults.
     #[serde(default)]
     pub extra_rules: Vec<Rule>,
@@ -371,8 +348,8 @@ pub struct ToolInputLimit {
 impl GuardrailConfig {
     /// Whether a given category is enabled. Defaults to `true` if not configured.
     #[must_use]
-    pub fn is_category_enabled(&self, cat: Category) -> bool {
-        self.categories.get(&cat).copied().unwrap_or(true)
+    pub fn is_category_enabled(&self, cat: &Category) -> bool {
+        self.categories.get(cat.as_str()).copied().unwrap_or(true)
     }
 
     /// Whether a rule name is disabled in this config.
@@ -380,6 +357,11 @@ impl GuardrailConfig {
     pub fn is_rule_disabled(&self, name: &str) -> bool {
         self.disabled_rules.iter().any(|n| n == name)
     }
+}
+
+#[cfg(test)]
+pub(crate) fn cat(s: &str) -> Category {
+    s.parse().expect("valid category")
 }
 
 #[cfg(test)]
@@ -454,68 +436,37 @@ mod tests {
     // ── Category ────────────────────────────────────────────────
 
     #[test]
-    fn category_display_all_variants() {
-        let expected = [
-            (Category::Filesystem, "filesystem"),
-            (Category::Git, "git"),
-            (Category::Database, "database"),
-            (Category::Kubernetes, "kubernetes"),
-            (Category::Nix, "nix"),
-            (Category::Docker, "docker"),
-            (Category::Secrets, "secrets"),
-            (Category::Terraform, "terraform"),
-            (Category::Cloud, "cloud"),
-            (Category::Flux, "flux"),
-            (Category::Akeyless, "akeyless"),
-            (Category::Process, "process"),
-            (Category::Network, "network"),
-            (Category::Nosql, "nosql"),
-        ];
-        for (cat, name) in expected {
-            assert_eq!(cat.to_string(), name, "Display mismatch for {cat:?}");
+    fn category_is_any_lowercase_name() {
+        for name in ["filesystem", "git", "my-suite", "team_x", "v2"] {
+            let c: Category = name.parse().unwrap();
+            assert_eq!(c.to_string(), name);
+            assert_eq!(c.as_str(), name);
         }
     }
 
     #[test]
-    fn category_serde_round_trip_all_variants() {
-        for cat in Category::all().iter().copied() {
-            let json = serde_json::to_string(&cat).unwrap();
-            let back: Category = serde_json::from_str(&json).unwrap();
-            assert_eq!(back, cat, "serde round-trip failed for {cat:?}");
+    fn category_serde_round_trip() {
+        let c = cat("database");
+        let json = serde_json::to_string(&c).unwrap();
+        assert_eq!(json, r#""database""#);
+        let back: Category = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+    }
+
+    #[test]
+    fn category_refuses_empty_or_non_lowercase_names() {
+        for bad in ["", "Git", "has space", "dot.name"] {
+            let err = bad.parse::<Category>().unwrap_err();
+            assert_eq!(err.type_name, "Category");
+            let result: Result<Category, _> = serde_json::from_str(&format!("{bad:?}"));
+            assert!(result.is_err(), "{bad:?}");
         }
     }
 
     #[test]
-    fn category_invalid_deserialize() {
-        let result: Result<Category, _> = serde_json::from_str(r#""bogus""#);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn category_ordering() {
-        assert!(Category::Filesystem < Category::Git);
-        assert!(Category::Network < Category::Nosql);
-    }
-
-    #[test]
-    fn category_all_returns_14_variants() {
-        assert_eq!(Category::all().len(), 14);
-    }
-
-    #[test]
-    fn category_fromstr_round_trip() {
-        for cat in Category::all().iter().copied() {
-            let s = cat.to_string();
-            let parsed: Category = s.parse().unwrap();
-            assert_eq!(parsed, cat, "FromStr round-trip failed for {cat:?}");
-        }
-    }
-
-    #[test]
-    fn category_fromstr_invalid() {
-        let err = "bogus".parse::<Category>().unwrap_err();
-        assert_eq!(err.type_name, "Category");
-        assert!(err.to_string().contains("bogus"));
+    fn category_ordering_is_by_name() {
+        assert!(cat("filesystem") < cat("git"));
+        assert!(cat("network") < cat("nosql"));
     }
 
     // ── Decision ────────────────────────────────────────────────
@@ -657,7 +608,7 @@ mod tests {
         let rule = Rule::builder("test-rule", r"rm\s+-rf")
             .severity(Severity::Block)
             .message("danger")
-            .category(Category::Filesystem)
+            .category(cat("filesystem"))
             .test_block("rm -rf /")
             .test_allow("rm file.txt")
             .build();
@@ -668,7 +619,7 @@ mod tests {
         assert_eq!(back.pattern, r"rm\s+-rf");
         assert_eq!(back.severity, Severity::Block);
         assert_eq!(back.message, "danger");
-        assert_eq!(back.category, Category::Filesystem);
+        assert_eq!(back.category, cat("filesystem"));
         assert_eq!(back.test_block.as_deref(), Some("rm -rf /"));
         assert_eq!(back.test_allow.as_deref(), Some("rm file.txt"));
     }
@@ -678,7 +629,7 @@ mod tests {
         let rule = Rule::builder("yaml-rule", "pattern")
             .severity(Severity::Warn)
             .message("warning")
-            .category(Category::Git)
+            .category(cat("git"))
             .build();
 
         let yaml = serde_yaml::to_string(&rule).unwrap();
@@ -739,7 +690,7 @@ mod tests {
         assert_eq!(rule.name, "name");
         assert_eq!(rule.pattern, "pattern");
         assert_eq!(rule.severity, Severity::Block);
-        assert_eq!(rule.category, Category::Filesystem);
+        assert_eq!(rule.category, cat("general"));
         assert!(rule.message.is_empty());
         assert!(rule.test_block.is_none());
         assert!(rule.test_allow.is_none());
@@ -750,13 +701,13 @@ mod tests {
         let rule = Rule::builder("n", "p")
             .severity(Severity::Warn)
             .message("msg")
-            .category(Category::Docker)
+            .category(cat("docker"))
             .test_block("block cmd")
             .test_allow("allow cmd")
             .build();
         assert_eq!(rule.severity, Severity::Warn);
         assert_eq!(rule.message, "msg");
-        assert_eq!(rule.category, Category::Docker);
+        assert_eq!(rule.category, cat("docker"));
         assert_eq!(rule.test_block.as_deref(), Some("block cmd"));
         assert_eq!(rule.test_allow.as_deref(), Some("allow cmd"));
     }
@@ -786,7 +737,7 @@ mod tests {
     #[test]
     fn config_serde_round_trip() {
         let mut config = GuardrailConfig::default();
-        config.categories.insert(Category::Git, false);
+        config.categories.insert("git".to_owned(), false);
         config.disabled_rules.push("rm-rf-root".into());
         config
             .extra_rules
@@ -794,7 +745,7 @@ mod tests {
 
         let yaml = serde_yaml::to_string(&config).unwrap();
         let back: GuardrailConfig = serde_yaml::from_str(&yaml).unwrap();
-        assert_eq!(back.categories.get(&Category::Git), Some(&false));
+        assert_eq!(back.categories.get("git"), Some(&false));
         assert_eq!(back.disabled_rules, vec!["rm-rf-root"]);
         assert_eq!(back.extra_rules.len(), 1);
     }
@@ -810,16 +761,16 @@ mod tests {
     #[test]
     fn config_is_category_enabled_default_true() {
         let config = GuardrailConfig::default();
-        assert!(config.is_category_enabled(Category::Git));
-        assert!(config.is_category_enabled(Category::Filesystem));
+        assert!(config.is_category_enabled(&cat("git")));
+        assert!(config.is_category_enabled(&cat("filesystem")));
     }
 
     #[test]
     fn config_is_category_enabled_explicit_false() {
         let mut config = GuardrailConfig::default();
-        config.categories.insert(Category::Git, false);
-        assert!(!config.is_category_enabled(Category::Git));
-        assert!(config.is_category_enabled(Category::Filesystem));
+        config.categories.insert("git".to_owned(), false);
+        assert!(!config.is_category_enabled(&cat("git")));
+        assert!(config.is_category_enabled(&cat("filesystem")));
     }
 
     #[test]
@@ -879,12 +830,12 @@ extraRules: []
   pattern: "x"
   severity: block
   message: "nope"
-  category: nonexistent
+  category: Not Lowercase
 "#;
         let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
         assert!(
             result.is_err(),
-            "invalid category should fail deserialization"
+            "a category that is not a lowercase name should fail deserialization"
         );
     }
 
@@ -899,13 +850,14 @@ extraRules: []
     }
 
     #[test]
-    fn config_invalid_category_key_yaml() {
+    fn config_category_toggles_accept_any_suite_category() {
         let yaml = r#"
 categories:
-  nonexistent: false
+  my-suite: false
 "#;
-        let result: Result<GuardrailConfig, _> = serde_yaml::from_str(yaml);
-        assert!(result.is_err(), "invalid category key should fail");
+        let config: GuardrailConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(!config.is_category_enabled(&cat("my-suite")));
+        assert!(config.is_category_enabled(&cat("git")));
     }
 
     #[test]

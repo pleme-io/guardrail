@@ -117,9 +117,11 @@ guardrail list       # show every active rule
 
 ## What gets blocked
 
-**~2,500 rules across 14 categories**: `filesystem`, `git`, `database`,
-`kubernetes`, `nix`, `docker`, `secrets`, `terraform`, `cloud`, `flux`,
-`process`, `network`, `nosql`, and more.
+**~2,500 rules.** A category is any lowercase name a suite chooses; the bundled
+generic suites use `filesystem`, `git`, `database`, `kubernetes`, `nix`,
+`docker`, `secrets`, `terraform`, `cloud`, `flux`, `process`, `network` and
+`nosql`. Organisation-specific suites live in their own repos and are added
+through `rules.d/`.
 
 ### Compiled-in defaults (always active, zero config)
 

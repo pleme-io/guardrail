@@ -320,11 +320,6 @@ mod tests {
     fn all_suite_rules() -> Vec<Rule> {
         let suites: &[(&str, &str)] = &[
             ("defaults", include_str!("../rules/defaults.yaml")),
-            ("akeyless", include_str!("../rules/akeyless.yaml")),
-            (
-                "akeyless-generated",
-                include_str!("../rules/akeyless-generated.yaml"),
-            ),
             ("aws", include_str!("../rules/aws.yaml")),
             ("aws-generated", include_str!("../rules/aws-generated.yaml")),
             ("azure", include_str!("../rules/azure.yaml")),
@@ -333,10 +328,6 @@ mod tests {
             ("nosql", include_str!("../rules/nosql.yaml")),
             ("process", include_str!("../rules/process.yaml")),
             ("sql", include_str!("../rules/sql.yaml")),
-            (
-                "pleme-doctrine",
-                include_str!("../rules/pleme-doctrine.yaml"),
-            ),
         ];
 
         let mut all = Vec::new();
@@ -755,170 +746,5 @@ mod tests {
     fn synthesize_from_name_single_word() {
         let cmd = synthesize_from_name("shutdown");
         assert_eq!(cmd, "shutdown --id test-123");
-    }
-}
-
-#[cfg(test)]
-mod pleme_doctrine_tests {
-    use super::*;
-    use crate::model::{Rule, Severity};
-
-    fn doctrine() -> Vec<Rule> {
-        serde_yaml::from_str(include_str!("../rules/pleme-doctrine.yaml"))
-            .expect("pleme-doctrine.yaml must parse")
-    }
-
-    /// `sed-inplace-any-file` is BLOCK by operator override, not warn.
-    ///
-    /// Pinned because severity is the whole point of the rule: a stream editor
-    /// reports success based on whether it RAN, never on whether what it wrote
-    /// is valid, so its failure mode is indistinguishable from success. A
-    /// silent downgrade to `warn` in some future edit would leave the rule
-    /// present and looking correct while permitting the thing it names.
-    ///
-    /// The name is load-bearing here, not incidental: this list used to hold
-    /// `sed-inplace-structured-file{,-chained}`, whose guard was a function of
-    /// the FILENAME. Broadening to every path (2026-08-11) renamed the rule,
-    /// and a rename that did not reach this list would `panic!("missing")` —
-    /// which is the intended behaviour, since a severity pin naming a rule
-    /// nobody defines is a guard over zero subjects.
-    #[test]
-    fn sed_inplace_rules_are_block_not_warn() {
-        let rules = doctrine();
-        for name in ["sed-inplace-any-file"] {
-            let r = rules
-                .iter()
-                .find(|r| r.name == name)
-                .unwrap_or_else(|| panic!("rule '{name}' is missing"));
-            assert_eq!(r.severity, Severity::Block, "rule '{name}' must be Block");
-        }
-    }
-
-    /// A blocking rule that fires on prose ABOUT the rule trains the operator to
-    /// bypass the gate, and takes the true findings down with it.
-    #[test]
-    fn sed_rules_do_not_fire_on_prose_describing_them() {
-        let engine = RegexEngine::new(doctrine()).expect("compiles");
-        for prose in [
-            "echo 'the rule is: never use sed -i on a .nix file'",
-            "grep -n 'sed -i' docs/deshellify.md",
-            "sed -n '1,20p' README.md",
-        ] {
-            assert!(
-                matches!(engine.check(prose), Decision::Allow),
-                "must not fire on: {prose}"
-            );
-        }
-    }
-
-    #[test]
-    fn sed_rules_do_fire_on_the_real_thing() {
-        let engine = RegexEngine::new(doctrine()).expect("compiles");
-        for cmd in [
-            "sed -i 's/foo/bar/' flake.nix",
-            "cd repo && sed -i.bak 's/a/b/' Cargo.toml",
-            "perl -i -pe 's/x/y/' values.yaml",
-            // The paths the old extension list could not see. Each is a real
-            // shape: substrate's goDirectiveNormalization wrote the first one
-            // inside a Nix build phase, and a derivation phase names its target
-            // through a variable far more often than through a literal.
-            "sed -i -E 's|^go 1.25$|go 1.25.0|' go.mod",
-            "sed -i 's/a/b/' \"$out/etc/config\"",
-            "sed -i '' 's/x/y/' Dockerfile",
-        ] {
-            assert!(
-                !matches!(engine.check(cmd), Decision::Allow),
-                "must fire on: {cmd}"
-            );
-        }
-    }
-
-    /// The scratch-interpreter rule is the sibling shape: blocked from
-    /// `sed -i`, the reflex is a heredoc that rewrites the same file. It must
-    /// fire on a mutation and stay quiet on a read, or it costs more than it
-    /// earns — see the rule's own comment for why it is `warn`.
-    #[test]
-    fn scratch_interpreter_rule_separates_mutation_from_reading() {
-        let engine = RegexEngine::new(doctrine()).expect("compiles");
-        for cmd in [
-            "python3 - <<'PY'",
-            "node -c \"require('fs').writeFileSync('a.json','{}')\"",
-        ] {
-            assert!(
-                !matches!(engine.check(cmd), Decision::Allow),
-                "must fire on: {cmd}"
-            );
-        }
-        for cmd in [
-            "python3 -c 'import json,sys; print(json.load(sys.stdin)[\"rev\"])'",
-            "echo 'a python3 heredoc that rewrites a file is the same shape as sed -i'",
-        ] {
-            assert!(
-                matches!(engine.check(cmd), Decision::Allow),
-                "must not fire on: {cmd}"
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-mod macos_defaults_tests {
-    use super::*;
-    use crate::model::{Rule, Severity};
-
-    fn engine() -> RegexEngine {
-        let rules: Vec<Rule> = serde_yaml::from_str(include_str!("../rules/pleme-doctrine.yaml"))
-            .expect("pleme-doctrine.yaml must parse");
-        let r = rules
-            .iter()
-            .find(|r| r.name == "macos-defaults-write-not-declared")
-            .expect("rule 'macos-defaults-write-not-declared' is missing");
-        assert_eq!(
-            r.severity,
-            Severity::Block,
-            "declared-only macOS state is Block by operator override"
-        );
-        RegexEngine::new(rules).expect("compiles")
-    }
-
-    /// Each shape an agent actually uses to reach the defaults DB. The
-    /// production prefilter runs here, so a spelling missing from
-    /// DANGEROUS_PREFIXES fails this test instead of being fast-rejected.
-    #[test]
-    fn fires_on_every_mutation_shape() {
-        let engine = engine();
-        for cmd in [
-            "defaults write com.apple.dock autohide -bool true",
-            "/usr/bin/defaults write com.apple.universalaccess reduceMotion -bool false",
-            "sudo -u luis defaults write NSGlobalDomain KeyRepeat -int 1",
-            "defaults -currentHost write com.apple.screensaver idleTime 0",
-            "defaults delete com.apple.dock persistent-apps",
-            "defaults import com.apple.dock dock.plist",
-            "ssh ryn '/usr/bin/defaults write com.apple.dock mru-spaces -bool false'",
-            "cd /tmp && defaults write com.apple.finder AppleShowAllFiles true",
-        ] {
-            assert!(
-                !matches!(engine.check(cmd), Decision::Allow),
-                "must fire on: {cmd}"
-            );
-        }
-    }
-
-    /// Reading is how drift is found; blocking it would remove the sensor.
-    #[test]
-    fn allows_reads_and_prose() {
-        let engine = engine();
-        for cmd in [
-            "defaults read com.apple.dock",
-            "/usr/bin/defaults read com.apple.AppleMultitouchTrackpad",
-            "ssh ryn '/usr/bin/defaults read com.apple.universalaccess'",
-            "defaults domains",
-            "echo 'declare it instead of running defaults write by hand'",
-        ] {
-            assert!(
-                matches!(engine.check(cmd), Decision::Allow),
-                "must not fire on: {cmd}"
-            );
-        }
     }
 }

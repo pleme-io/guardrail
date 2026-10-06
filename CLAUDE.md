@@ -59,13 +59,16 @@ full DFA testing without normalization or prefilter interference.
 
 ## Rule Files
 
-Embedded defaults + pluggable suites in `~/.config/guardrail/rules.d/`:
+Embedded defaults + pluggable suites in `~/.config/guardrail/rules.d/`. This
+repo holds only generic suites; a suite about one organisation lives in that
+organisation's blackmatter-* repo and is contributed through
+`blackmatter.components.claude.guardrail.ruleSuites` (akeyless suites in
+blackmatter-akeyless, pleme-io doctrine in blackmatter-pleme).
 
 | File | Rules | Source |
 |------|-------|--------|
-| `defaults.yaml` | 38 | Hand-written (compiled-in) |
+| `defaults.yaml` | 74 | Hand-written (compiled-in) |
 | `sql.yaml` | 45 | Hand-written |
-| `akeyless.yaml` | 35 | Hand-written |
 | `aws.yaml` | 26 | Hand-written |
 | `azure.yaml` | 18 | Hand-written |
 | `gcp.yaml` | 14 | Hand-written |
@@ -73,7 +76,7 @@ Embedded defaults + pluggable suites in `~/.config/guardrail/rules.d/`:
 | `nosql.yaml` | 8 | Hand-written |
 | `process.yaml` | 6 | Hand-written |
 | `aws-generated.yaml` | ~2,200 | `guardrail-gen` from AWS SDK models |
-| `akeyless-generated.yaml` | ~70 | `guardrail-gen` from OpenAPI spec |
+| `prefilter.yaml` | data | commands, keywords and markers the prefilter routes to the engine |
 
 Rule format:
 ```yaml
@@ -84,12 +87,19 @@ Rule format:
   category: filesystem
   test_block: "rm -rf /"       # optional: must match pattern
   test_allow: "rm -rf ./target" # optional: must NOT match pattern
+  examples:                     # optional: more cases, same meaning
+    block: ["rm -rf / --no-preserve-root"]
+    allow: ["rm -rf build/"]
+  window: team-production       # optional: allowed only inside an open change window with this tag
 ```
 
-## Categories (14)
+`guardrail validate` runs every rule's block and allow examples and checks the
+declared change windows; a failure exits non-zero.
 
-filesystem, git, database, kubernetes, nix, docker, secrets, terraform,
-cloud, flux, akeyless, process, network, nosql
+## Categories
+
+A category is any lowercase name (`[a-z0-9_-]+`) a suite chooses; the
+`categories` map in `guardrail.yaml` turns one off (missing = on).
 
 ## CLI
 

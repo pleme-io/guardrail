@@ -611,14 +611,14 @@ fn cmd_validate() -> Result<()> {
     let prefilter = guardrail::engine::PrefixPrefilter::from_user_config();
     for rule in engine.rules() {
         let single = RegexEngine::with_prefilter(vec![rule.clone()], prefilter.clone())?;
-        if let Some(t) = &rule.test_block {
+        for t in rule.test_block.iter().chain(&rule.examples.block) {
             if matches!(single.check(t), Decision::Allow) {
-                failures.push(format!("{}: test_block does not match: {t}", rule.name));
+                failures.push(format!("{}: block example does not match: {t}", rule.name));
             }
         }
-        if let Some(t) = &rule.test_allow {
+        for t in rule.test_allow.iter().chain(&rule.examples.allow) {
             if !matches!(single.check(t), Decision::Allow) {
-                failures.push(format!("{}: test_allow matches: {t}", rule.name));
+                failures.push(format!("{}: allow example matches: {t}", rule.name));
             }
         }
     }
@@ -635,7 +635,7 @@ fn cmd_validate() -> Result<()> {
         anyhow::bail!("{} rule test or window failure(s)", failures.len());
     }
     eprintln!(
-        "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows); every rule's test_block and test_allow hold",
+        "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows); every rule's block and allow examples hold",
         engine.rule_count(),
         user_config.disabled_rules.len(),
         user_config.extra_rules.len(),

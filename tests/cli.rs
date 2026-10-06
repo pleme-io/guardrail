@@ -10,9 +10,7 @@ fn setup_with_suites() -> TempDir {
     let rules_d = guardrail_dir.join("rules.d");
     fs::create_dir_all(&rules_d).unwrap();
     // Copy suite files
-    for suite in [
-        "akeyless", "aws", "gcp", "azure", "process", "network", "nosql",
-    ] {
+    for suite in ["aws", "gcp", "azure", "process", "network", "nosql"] {
         let src = format!("{}/rules/{suite}.yaml", env!("CARGO_MANIFEST_DIR"));
         if std::path::Path::new(&src).exists() {
             fs::copy(&src, rules_d.join(format!("{suite}.yaml"))).unwrap();
@@ -219,7 +217,7 @@ fn suites_load_via_env() {
     Command::cargo_bin("guardrail").unwrap()
         .args(["check"])
         .env("XDG_CONFIG_HOME", dir.path())
-        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"akeyless delete-item --name /my/secret"}}"#)
+        .write_stdin(r#"{"tool_name":"Bash","tool_input":{"command":"gcloud compute instances delete my-instance --zone us-central1-a"}}"#)
         .assert()
         .failure()
         .stdout(predicate::str::contains("block"));
