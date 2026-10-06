@@ -14,10 +14,22 @@ static COMMIT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:^|[;&|(]\s*)git((?:\s+-C\s+\S+)*)\s+commit\b([^;&|)]*)").expect("valid regex")
 });
 
+static CD: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[;&|(]\s*)(?:cd|pushd)\s+([^\s;&|)]+)").expect("valid regex")
+});
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitCall {
+    pub cds: Vec<String>,
     pub dirs: Vec<String>,
     pub all: bool,
+}
+
+fn expand_home(path: &str) -> PathBuf {
+    match (path.strip_prefix('~'), std::env::var_os("HOME")) {
+        (Some(rest), Some(home)) => PathBuf::from(home).join(rest.trim_start_matches('/')),
+        _ => PathBuf::from(path),
+    }
 }
 
 fn unquote(s: &str) -> &str {
@@ -61,6 +73,11 @@ fn takes_value(token: &str) -> bool {
 #[must_use]
 pub fn parse_commit(command: &str) -> Option<CommitCall> {
     let caps = COMMIT.captures(command)?;
+    let start = caps.get(0).map_or(0, |m| m.start());
+    let cds = CD
+        .captures_iter(&command[..start])
+        .map(|c| unquote(&c[1]).to_string())
+        .collect();
     let dirs = caps[1]
         .split_whitespace()
         .filter(|t| *t != "-C")
@@ -81,7 +98,7 @@ pub fn parse_commit(command: &str) -> Option<CommitCall> {
         }
         skip = takes_value(token);
     }
-    Some(CommitCall { dirs, all })
+    Some(CommitCall { cds, dirs, all })
 }
 
 fn git(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
@@ -160,6 +177,12 @@ pub fn block(input: &HookInput) -> Option<(String, String)> {
     let command = input.tool_input.as_ref()?.command.as_deref()?;
     let call = parse_commit(command)?;
     let mut dir = PathBuf::from(input.cwd.as_deref().unwrap_or("."));
+    for d in &call.cds {
+        let next = dir.join(expand_home(d));
+        if next.is_dir() {
+            dir = next;
+        }
+    }
     for d in &call.dirs {
         dir = dir.join(d);
     }
@@ -313,6 +336,18 @@ mod tests {
         let cmd = format!("git -C {name} commit -m x");
         assert!(block(&input(parent, &cmd)).is_some());
         assert_eq!(block(&input(parent, "git commit -m x")), None);
+    }
+
+    #[test]
+    fn a_leading_cd_resolves_the_repo_away_from_the_session_cwd() {
+        let t = gen_repo();
+        write(t.path(), "Cargo.lock", "lock-v2\n");
+        sh(t.path(), &["add", "Cargo.lock"]);
+        let elsewhere = tempfile::tempdir().expect("tempdir");
+        let abs = t.path().display();
+        assert!(block(&input(elsewhere.path(), &format!("cd {abs} && git commit -qm x"))).is_some());
+        assert!(block(&input(elsewhere.path(), &format!("cd '{abs}'; git add -A; git commit -m x"))).is_some());
+        assert_eq!(block(&input(elsewhere.path(), "git commit -m x")), None);
     }
 
     #[test]
