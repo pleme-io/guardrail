@@ -129,7 +129,7 @@ let
     extraMarkers = strList "Byte sequences that send a command to the rule engine.";
   };
 
-  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "exec" ];
+  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "genLockTie" "exec" ];
 
   hookAction =
     { config, ... }:

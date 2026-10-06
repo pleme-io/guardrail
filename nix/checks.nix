@@ -150,6 +150,10 @@ let
           action = "mintAdvise";
           matcher = "Bash";
         }
+        {
+          action = "genLockTie";
+          matcher = "Bash";
+        }
         { action = "searchNudge"; }
       ];
       Stop = [

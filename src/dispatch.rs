@@ -43,6 +43,7 @@ pub enum Builtin {
     SearchNudge,
     SearchAdvise,
     MintAdvise,
+    GenLockTie,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +69,10 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         matcher: Option<String>,
     },
+    GenLockTie {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        matcher: Option<String>,
+    },
     Exec {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         matcher: Option<String>,
@@ -84,6 +89,7 @@ impl Action {
             | Self::SearchNudge { matcher }
             | Self::SearchAdvise { matcher }
             | Self::MintAdvise { matcher }
+            | Self::GenLockTie { matcher }
             | Self::Exec { matcher, .. } => matcher.as_deref(),
         }
     }
@@ -96,6 +102,7 @@ impl Action {
             Self::SearchNudge { .. } => Some(Builtin::SearchNudge),
             Self::SearchAdvise { .. } => Some(Builtin::SearchAdvise),
             Self::MintAdvise { .. } => Some(Builtin::MintAdvise),
+            Self::GenLockTie { .. } => Some(Builtin::GenLockTie),
             Self::Exec { .. } => None,
         }
     }
@@ -368,7 +375,7 @@ pub fn validate(table: &HookTable) -> Vec<String> {
                 ActionEntry::Valid(a) => a,
                 ActionEntry::Invalid(raw) => {
                     failures.push(format!(
-                        "{at}: not a valid action (one of check, inputLimit, searchNudge, searchAdvise, mintAdvise, exec with a command): {}",
+                        "{at}: not a valid action (one of check, inputLimit, searchNudge, searchAdvise, mintAdvise, genLockTie, exec with a command): {}",
                         serde_json::to_string(raw).unwrap_or_default()
                     ));
                     continue;
@@ -477,6 +484,7 @@ mod tests {
             ("searchNudge", Builtin::SearchNudge),
             ("searchAdvise", Builtin::SearchAdvise),
             ("mintAdvise", Builtin::MintAdvise),
+            ("genLockTie", Builtin::GenLockTie),
         ] {
             let rec = Recorder::new(|_| Outcome::Pass);
             let t = table(&format!("PreToolUse:\n  - action: {name}"));

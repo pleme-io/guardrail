@@ -239,7 +239,7 @@ hooks:
     - action: inputLimit     # toolInputLimits, same as `guardrail input-limit`
       matcher: mcp__atlassian__.*
   PostToolUse:
-    - action: searchAdvise   # also searchNudge, mintAdvise
+    - action: searchAdvise   # also searchNudge, mintAdvise, genLockTie
       matcher: Grep|Glob
   Stop:
     - action: exec           # payload on stdin; its decision is passed through

@@ -50,6 +50,8 @@ enum Command {
     /// `PostToolUse` advice for Bash|Write: a new primitive is being MINTED,
     /// so route the name through /naming before it sets.
     MintAdvise,
+    /// `PreToolUse` for Bash: block a `git commit` whose staged Cargo.gen.lock is stale against Cargo.lock or a manifest.
+    GenLockTie,
     /// Run the actions configured under `hooks.<EVENT>` in guardrail.yaml; silent when there are none.
     Hook {
         /// Claude Code hook event name, e.g. `PreToolUse` or `Stop`.
@@ -83,6 +85,7 @@ fn main() -> Result<()> {
             cmd_mint_advise();
             Ok(())
         }
+        Command::GenLockTie => cmd_gen_lock_tie(),
         Command::InputLimit => cmd_input_limit(),
         Command::Hook { event } => cmd_hook(&event),
     }
@@ -302,8 +305,17 @@ impl Builtins for CliBuiltins {
                 }
                 _ => Outcome::Pass,
             },
+            Builtin::GenLockTie => block(Ok(guardrail::genlock::block(input))),
         }
     }
+}
+
+fn cmd_gen_lock_tie() -> Result<()> {
+    let input = hook::parse_stdin().context("reading hook input")?;
+    if let Some((rule, message)) = guardrail::genlock::block(&input) {
+        emit_block(&rule, &message);
+    }
+    Ok(())
 }
 
 fn cmd_hook(event: &str) -> Result<()> {

@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "332f535ce83bd4957a37976933a4d050d092342a492fc838e49708a744395d78",
+  "cargo_lock_sha256": "eed863b066ede6a99a1d8f5f9b22ac36c093ece508188b94ecdbe5a341835b90",
   "manifest_sha256": {
-    "Cargo.toml": "3bb93b85f1db273841e631c3480b225dd1e9291ee329a17338b6998dcf5914c7"
+    "Cargo.toml": "0c46f6e64c9bf8dd3f9555c97d1b2bdae154cbbf19a8e64ff3250d6d52084021"
   },
   "target_resolves": {
     "base": {
@@ -215,6 +215,22 @@
           "std"
         ]
       },
+      "block-buffer-0.12.1": {
+        "runtime_dependencies": [
+          {
+            "name": "hybrid_array",
+            "package_key": "hybrid-array-0.4.15",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
       "bstr-1.13.1": {
         "runtime_dependencies": [
           {
@@ -401,10 +417,72 @@
         "build_dependencies": [],
         "features": []
       },
+      "const-oid-0.10.2": {
+        "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": []
+      },
+      "crypto-common-0.2.2": {
+        "runtime_dependencies": [
+          {
+            "name": "hybrid_array",
+            "package_key": "hybrid-array-0.4.15",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
       "difflib-0.4.0": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
+      },
+      "digest-0.11.3": {
+        "runtime_dependencies": [
+          {
+            "name": "block_buffer",
+            "package_key": "block-buffer-0.12.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "const_oid",
+            "package_key": "const-oid-0.10.2",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "common",
+            "package_key": "crypto-common-0.2.2",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "alloc",
+          "block-api",
+          "default",
+          "oid"
+        ]
       },
       "equivalent-1.0.2": {
         "runtime_dependencies": [],
@@ -609,6 +687,16 @@
             "tree": "target"
           },
           {
+            "name": "hex",
+            "package_key": "hex-0.4.3",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "okiba",
             "package_key": "okiba-0.3.2",
             "kind": "normal",
@@ -653,6 +741,16 @@
           {
             "name": "serde_yaml",
             "package_key": "serde_yaml-0.9.34+deprecated",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "sha2",
+            "package_key": "sha2-0.11.0",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -719,6 +817,33 @@
       },
       "heck-0.5.0": {
         "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": []
+      },
+      "hex-0.4.3": {
+        "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": [
+          "alloc",
+          "default",
+          "std"
+        ]
+      },
+      "hybrid-array-0.4.15": {
+        "runtime_dependencies": [
+          {
+            "name": "typenum",
+            "package_key": "typenum-1.20.1",
+            "kind": "normal",
+            "features": [
+              "const-generics"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
         "build_dependencies": [],
         "features": []
       },
@@ -1301,6 +1426,46 @@
         "build_dependencies": [],
         "features": []
       },
+      "sha2-0.11.0": {
+        "runtime_dependencies": [
+          {
+            "name": "cfg_if",
+            "package_key": "cfg-if-1.0.5",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "cpufeatures",
+            "package_key": "cpufeatures-0.3.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": "cfg(any(target_arch = \"aarch64\", target_arch = \"x86_64\", target_arch = \"x86\"))",
+            "tree": "target"
+          },
+          {
+            "name": "digest",
+            "package_key": "digest-0.11.3",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "alloc",
+          "default",
+          "oid"
+        ]
+      },
       "strsim-0.11.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
@@ -1463,6 +1628,13 @@
         "build_dependencies": [],
         "features": []
       },
+      "typenum-1.20.1": {
+        "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": [
+          "const-generics"
+        ]
+      },
       "unicode-ident-1.0.26": {
         "runtime_dependencies": [],
         "build_dependencies": [],
@@ -1505,6 +1677,52 @@
     "targets": {
       "aarch64-apple-darwin": {
         "overrides": {
+          "cpufeatures-0.3.1": {
+            "runtime_dependencies": [
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"android\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          },
           "rustix-1.1.5": {
             "runtime_dependencies": [
               {
@@ -1580,6 +1798,52 @@
       },
       "aarch64-unknown-linux-gnu": {
         "overrides": {
+          "cpufeatures-0.3.1": {
+            "runtime_dependencies": [
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"android\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          },
           "linux-raw-sys-0.12.1": {
             "runtime_dependencies": [],
             "build_dependencies": [],
@@ -1698,6 +1962,52 @@
       },
       "aarch64-unknown-linux-musl": {
         "overrides": {
+          "cpufeatures-0.3.1": {
+            "runtime_dependencies": [
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"android\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.190",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          },
           "linux-raw-sys-0.12.1": {
             "runtime_dependencies": [],
             "build_dependencies": [],
@@ -1816,6 +2126,11 @@
       },
       "x86_64-apple-darwin": {
         "overrides": {
+          "cpufeatures-0.3.1": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": []
+          },
           "rustix-1.1.5": {
             "runtime_dependencies": [
               {
@@ -1891,6 +2206,11 @@
       },
       "x86_64-unknown-linux-gnu": {
         "overrides": {
+          "cpufeatures-0.3.1": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": []
+          },
           "linux-raw-sys-0.12.1": {
             "runtime_dependencies": [],
             "build_dependencies": [],
@@ -2009,6 +2329,11 @@
       },
       "x86_64-unknown-linux-musl": {
         "overrides": {
+          "cpufeatures-0.3.1": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": []
+          },
           "linux-raw-sys-0.12.1": {
             "runtime_dependencies": [],
             "build_dependencies": [],
@@ -2163,6 +2488,9 @@
     "bitflags-2.13.2": {
       "edition": "2021"
     },
+    "block-buffer-0.12.1": {
+      "edition": "2024"
+    },
     "bstr-1.13.1": {
       "edition": "2021"
     },
@@ -2191,8 +2519,20 @@
     "colorchoice-1.0.5": {
       "edition": "2021"
     },
+    "const-oid-0.10.2": {
+      "edition": "2024"
+    },
+    "cpufeatures-0.3.1": {
+      "edition": "2024"
+    },
+    "crypto-common-0.2.2": {
+      "edition": "2024"
+    },
     "difflib-0.4.0": {
       "edition": "2015"
+    },
+    "digest-0.11.3": {
+      "edition": "2024"
     },
     "equivalent-1.0.2": {
       "edition": "2015"
@@ -2231,6 +2571,12 @@
     },
     "heck-0.5.0": {
       "edition": "2021"
+    },
+    "hex-0.4.3": {
+      "edition": "2018"
+    },
+    "hybrid-array-0.4.15": {
+      "edition": "2024"
     },
     "indexmap-2.14.2": {
       "edition": "2024"
@@ -2316,6 +2662,9 @@
     "serde_yaml-0.9.34+deprecated": {
       "edition": "2021"
     },
+    "sha2-0.11.0": {
+      "edition": "2024"
+    },
     "strsim-0.11.1": {
       "edition": "2015"
     },
@@ -2335,6 +2684,9 @@
     "thiserror-impl-2.0.21": {
       "edition": "2021",
       "proc_macro": true
+    },
+    "typenum-1.20.1": {
+      "edition": "2018"
     },
     "unicode-ident-1.0.26": {
       "edition": "2021"

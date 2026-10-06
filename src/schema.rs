@@ -170,6 +170,7 @@ mod tests {
                 "searchNudge",
                 "searchAdvise",
                 "mintAdvise",
+                "genLockTie",
                 "exec"
             ])
         );
