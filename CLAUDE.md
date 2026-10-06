@@ -102,7 +102,9 @@ A rule with `tools`, `field` or `cwd` is scoped: it is matched on its own
 names. An unscoped rule runs in the RegexSet behind the prefilter exactly as
 before. A scoped rule's examples may be objects, `{input, tool, cwd}`, so the
 call it applies to is part of the example; `validate` builds that call and runs
-it. `validate --hooked-tools A,B` also fails any rule whose tool `guardrail
+it. An MCP tool a scoped rule names is read only by the rules that name it:
+its fields are prose (a PR body, a comment, a page), and the command rules would
+refuse a runbook quoted in it. `validate --hooked-tools A,B` also fails any rule whose tool `guardrail
 check` is not registered for.
 
 Every config struct refuses an unknown key (`deny_unknown_fields`). The refusal

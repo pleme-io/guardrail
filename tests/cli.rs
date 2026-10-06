@@ -1003,3 +1003,17 @@ fn an_invalid_entry_in_a_window_file_never_opens_while_its_siblings_do() {
             "allowed inside change window ASM-2",
         ));
 }
+
+#[test]
+fn an_mcp_tool_a_scoped_rule_names_is_read_only_by_that_rule() {
+    let (config, cache) = hook_config(SCOPED);
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(r#"{"tool_name":"mcp__github__create_pull_request","tool_input":{"title":"runbook","body":"step 3: rm -rf / is never run"}}"#)
+        .assert()
+        .success();
+    guardrail_in(&config, &cache, &["check"])
+        .write_stdin(r#"{"tool_name":"mcp__other__run","tool_input":{"cmd":"rm -rf /"}}"#)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("rm-rf-root"));
+}

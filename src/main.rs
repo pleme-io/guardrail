@@ -102,8 +102,15 @@ fn cmd_check() -> Result<()> {
 
 /// The `check` pipeline over one payload: the first block, if any.
 fn check_input(input: &hook::HookInput) -> Result<Option<(String, String)>> {
-    let scannable = hook::extract_scannable_content(input);
     let guard = production_guard()?;
+    let scannable = if guard
+        .scoped
+        .claims(input.tool_name.as_deref().unwrap_or(""))
+    {
+        Vec::new()
+    } else {
+        hook::extract_scannable_content(input)
+    };
     let mut write_dangerous = false;
 
     for item in &scannable {

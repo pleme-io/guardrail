@@ -102,6 +102,18 @@ impl ScopedRules {
         self.rules.is_empty()
     }
 
+    /// Whether an MCP tool is named by a scoped rule. Such a tool's fields are
+    /// read only by the rules that name it: its text is prose (a PR body, a
+    /// comment, a page), and the command rules would refuse a runbook quoted in it.
+    #[must_use]
+    pub fn claims(&self, tool: &str) -> bool {
+        tool.starts_with("mcp__")
+            && self
+                .rules
+                .iter()
+                .any(|c| c.rule.tools.iter().any(|t| t == tool))
+    }
+
     #[must_use]
     pub fn rule(&self, name: &str) -> Option<&Rule> {
         self.rules.iter().map(|c| &c.rule).find(|r| r.name == name)
