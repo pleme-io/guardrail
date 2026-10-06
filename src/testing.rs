@@ -165,7 +165,7 @@ fn synthesize_from_name(name: &str) -> String {
 /// If the prefilter would skip DFA for this command, wraps in `echo '...'`
 /// (echo is in the dangerous prefix set, so it always reaches the DFA).
 fn ensure_engine_passthrough(cmd: &str) -> String {
-    let prefilter = PrefixPrefilter;
+    let prefilter = PrefixPrefilter::default();
     if prefilter.is_safe(cmd) {
         // Command would be fast-rejected — wrap to bypass prefilter
         format!("echo '{cmd}'")
@@ -587,7 +587,7 @@ mod tests {
 
     #[test]
     fn prefilter_trait_used_correctly() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         // Safe command → prefilter says safe → would need wrapping
         assert!(p.is_safe("cat README.md"));
         // Dangerous command → prefilter says not safe → no wrapping needed

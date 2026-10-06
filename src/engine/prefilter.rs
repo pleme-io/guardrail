@@ -1,247 +1,102 @@
 use std::collections::HashSet;
-use std::sync::LazyLock;
 
 use hayai::engine::{Prefilter, contains_ascii_ci};
 
-/// First-word prefixes that COULD trigger a rule.
-const DANGEROUS_PREFIXES: &[&str] = &[
-    // filesystem
-    "rm",
-    "dd",
-    "mkfs",
-    "chmod",
-    "chown",
-    "mv",
-    "truncate",
-    "shred",
-    // git
-    "git",
-    // database / SQL
-    "psql",
-    "mysql",
-    "sqlite3",
-    "sqlcmd",
-    "sqlx",
-    "diesel",
-    "prisma",
-    "liquibase",
-    "flyway",
-    "knex",
-    "rails",
-    "rake",
-    "python",
-    "django-admin",
-    "mongosh",
-    "mongo",
-    // kubernetes
-    "kubectl",
-    "helm",
-    "flux",
-    // cloud
-    "aws",
-    "gcloud",
-    "gsutil",
-    "az",
-    "bq",
-    // nix
-    "nix",
-    "nix-collect-garbage",
-    // docker
-    "docker",
-    // secrets
-    "sops",
-    "echo",
-    // terraform / iac
-    //
-    // `tofu` is the OpenTofu binary — a drop-in successor to `terraform` and
-    // what this fleet actually invokes. Its absence here was a silent hole: the
-    // prefilter fast-rejects before the DFA runs, so ANY `tofu` rule — existing
-    // or future — never reached the engine at all. A rule that cannot be
-    // reached is a guard over zero subjects.
-    "terraform",
-    "tofu",
-    "terragrunt",
-    "argocd",
-    "pulumi",
-    "ansible-playbook",
-    // stream editors
-    //
-    // In-place edits (`sed -i`, `perl -i`) of a file that stays are the class
-    // this covers: the editor cannot see the file's grammar, so it can leave
-    // something that still parses but means something else.
-    "sed",
-    "perl",
-    "awk",
-    // scratch interpreters used as editing tools
-    //
-    // The sibling shape of the stream editors above, and where the reflex goes
-    // once `sed -i` is blocked: a throwaway heredoc that opens the same file
-    // and rewrites it. `python` was already present (for django/rails-adjacent
-    // reasons); `ruby` and `node` were NOT, so `scratch-interpreter-file-
-    // mutation` fast-rejected before the DFA ran and could not fire on them at
-    // all — the same unreachability recorded above for `tofu`. Caught by that
-    // rule's own test, which is the argument for pairing every new rule with a
-    // must-fire case rather than eyeballing the pattern.
-    "ruby",
-    "node",
-    // akeyless
-    "akeyless",
-    "aky",
-    // process
-    "kill",
-    "killall",
-    "pkill",
-    "shutdown",
-    "poweroff",
-    "halt",
-    "reboot",
-    "systemctl",
-    "launchctl",
-    // network
-    "iptables",
-    "ufw",
-    "ip",
-    "nft",
-    // nosql
-    "redis-cli",
-    // curl/wget (pipe install, elasticsearch)
-    "curl",
-    "wget",
-    // mysql admin
-    "mysqladmin",
-    // shell wrappers -- commands that execute other commands
-    "sh",
-    "bash",
-    "zsh",
-    "fish",
-    "dash",
-    "env",
-    "sudo",
-    "doas",
-    "nohup",
-    "nice",
-    "timeout",
-    // eval / indirect execution
-    "eval",
-    "xargs",
-    "find",
-    // scheduling
-    "crontab",
-    "at",
-    // disk partitioning
-    "fdisk",
-    "parted",
-    "wipefs",
-    // sync/publish (supply chain)
-    "npm",
-    "cargo",
-    "gem",
-    "pip",
-    "twine",
-    // remote sync
-    "rsync",
-    "rclone",
-    // log wiping
-    "journalctl",
-    // ssh (remote command execution)
-    "ssh",
-    // pgrep — NOT destructive, and the only entry here that is not.
-    //
-    // It earns its place because `pgrep -f PATTERN` matches full command lines
-    // INCLUDING the shell running the loop, whose own argv contains PATTERN. So
-    // `until ! pgrep -f 'x'; do sleep; done` is true because of the waiter and
-    // hangs forever. Hit twice in one session (2026-08-02/03) — once wedging a
-    // rebuild wait, once falsely reporting a rebuild in flight.
-    //
-    // Without this entry the rule is unreachable: a command starting with
-    // `until`/`while` is fast-rejected before the DFA runs, so the regex never
-    // sees it. That is why `pgrep-f-self-matching-wait` was withdrawn on
-    // 2026-08-02 and is only viable now.
-    //
-    // Cost is real but small: `is_safe` does a `contains` plus a linear
-    // `starts_with` scan over this set for each of the first 3 words per
-    // segment, so one more entry is one more short comparison on the hot path —
-    // paid to make a footgun catchable rather than re-learnable.
-    "pgrep",
-    // macOS preferences — `defaults write|delete|import` mutates the defaults
-    // DB outside nix-darwin, which is how cid and ryn drifted to two different
-    // Spaces-swipe animations with identical declared config (2026-09-21).
-    // Both spellings: `starts_with` never sees `defaults` inside the
-    // absolute path.
-    "defaults",
-    "/usr/bin/defaults",
-];
+use crate::model::{PrefilterOverrides, PrefilterSpec};
 
-static PREFIX_SET: LazyLock<HashSet<&'static str>> =
-    LazyLock::new(|| DANGEROUS_PREFIXES.iter().copied().collect());
+const DEFAULT_SPEC_YAML: &str = include_str!("../../rules/prefilter.yaml");
 
-/// SQL keywords checked in a zero-alloc byte-level scan.
-const SQL_KEYWORDS: &[&[u8]] = &[
-    b"DROP ",
-    b"TRUNCATE ",
-    b"DELETE FROM",
-    b"REVOKE ",
-    b"FLUSHALL",
-    b"FLUSHDB",
-    b"VACUUM FULL",
-    b"BASE64",
-    b"| BASH",
-    b"| SH",
-];
-
-/// Production prefilter: skips DFA for commands whose first 3 words
-/// don't match a known dangerous prefix AND don't contain SQL keywords.
-///
-/// Safe commands (~99%): ~50ns. Dangerous commands: forwarded to DFA.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct PrefixPrefilter;
+#[derive(Debug, Clone)]
+pub struct PrefixPrefilter {
+    commands: HashSet<String>,
+    keywords: Vec<Vec<u8>>,
+    markers: Vec<Vec<u8>>,
+    start_markers: Vec<String>,
+}
 
 impl PrefixPrefilter {
-    /// Access the static set of dangerous prefixes (for test utilities).
     #[must_use]
-    pub fn prefix_set() -> &'static HashSet<&'static str> {
-        &PREFIX_SET
+    pub fn from_spec(spec: &PrefilterSpec) -> Self {
+        Self {
+            commands: spec.commands.iter().cloned().collect(),
+            keywords: spec
+                .keywords
+                .iter()
+                .map(|k| k.as_bytes().to_vec())
+                .collect(),
+            markers: spec.markers.iter().map(|m| m.as_bytes().to_vec()).collect(),
+            start_markers: spec.start_markers.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn default_spec() -> PrefilterSpec {
+        serde_yaml::from_str(DEFAULT_SPEC_YAML).expect("rules/prefilter.yaml is valid")
+    }
+
+    #[must_use]
+    pub fn configured(overrides: &PrefilterOverrides) -> Self {
+        let mut spec = Self::default_spec();
+        spec.commands
+            .retain(|c| !overrides.removed_commands.contains(c));
+        spec.commands
+            .extend(overrides.extra_commands.iter().cloned());
+        spec.keywords
+            .extend(overrides.extra_keywords.iter().cloned());
+        spec.markers.extend(overrides.extra_markers.iter().cloned());
+        Self::from_spec(&spec)
+    }
+}
+
+impl PrefixPrefilter {
+    #[must_use]
+    pub fn from_user_config() -> Self {
+        let overrides = crate::config::load_user_config(&crate::config::config_path())
+            .map(|c| c.prefilter)
+            .unwrap_or_default();
+        Self::configured(&overrides)
+    }
+}
+
+impl Default for PrefixPrefilter {
+    fn default() -> Self {
+        Self::from_spec(&Self::default_spec())
     }
 }
 
 impl Prefilter for PrefixPrefilter {
     fn is_safe(&self, command: &str) -> bool {
         let trimmed = command.trim_start();
-        if trimmed.starts_with('$') || trimmed.contains('`') {
+        if self
+            .start_markers
+            .iter()
+            .any(|m| trimmed.starts_with(m.as_str()))
+        {
             return false;
         }
         // Scan the first 3 words of EVERY SEGMENT, not the first 3 words of the
-        // whole command.
-        //
-        // A dangerous verb sits near the start of *its own* segment, but a
-        // chained command pushes it arbitrarily far from the start of the
-        // string. A bare `.take(3)` over the whole command therefore had a
-        // trivial bypass, confirmed live before this fix:
-        //
-        //     rm -rf /                 -> `rm` at word 1  -> blocked
-        //     true && rm -rf /         -> `rm` at word 3  -> blocked
-        //     cd /tmp && rm -rf /      -> `rm` at word 4  -> ALLOWED
-        //
-        // The last one never reached the DFA at all, so every rule in every
-        // suite was unreachable for it. Splitting on separators first keeps the
-        // cheap bounded-scan property (still at most 3 words per segment) while
-        // making position-in-the-string irrelevant.
-        let has_dangerous_prefix = command
+        // whole command: `cd /tmp && rm -rf /` puts `rm` at word 4, and a scan
+        // over the whole command let it skip the engine (confirmed live,
+        // 2026-07-27).
+        let has_command = command
             .split(|c| c == ';' || c == '&' || c == '|' || c == '\n')
             .any(|segment| {
                 segment.split_whitespace().take(3).any(|word| {
-                    PREFIX_SET.contains(word) || PREFIX_SET.iter().any(|p| word.starts_with(p))
+                    self.commands.contains(word)
+                        || self.commands.iter().any(|p| word.starts_with(p.as_str()))
                 })
             });
-        if has_dangerous_prefix {
+        if has_command {
             return false;
         }
         let bytes = command.as_bytes();
-        if SQL_KEYWORDS.iter().any(|kw| contains_ascii_ci(bytes, kw)) {
+        if self.keywords.iter().any(|kw| contains_ascii_ci(bytes, kw)) {
             return false;
         }
-        if bytes.windows(2).any(|w| w == b"/*")
-            || bytes.windows(3).any(|w| w == b"-- " || w == b"--\t")
+        if self
+            .markers
+            .iter()
+            .any(|m| !m.is_empty() && bytes.windows(m.len()).any(|w| w == m.as_slice()))
         {
             return false;
         }
@@ -262,7 +117,7 @@ mod chained_bypass_tests {
     /// form exited 1, the `cd`-prefixed form exited 0.
     #[test]
     fn a_dangerous_verb_after_a_safe_prefix_is_not_fast_rejected() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         for cmd in [
             "cd /tmp && rm -rf /",
             "cd a && cd b && rm -rf /",
@@ -278,7 +133,7 @@ mod chained_bypass_tests {
     /// prefilter exists so the ~99% safe majority costs ~50ns.
     #[test]
     fn genuinely_safe_chains_are_still_fast_rejected() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         // NOTE: `cargo` and `echo` are themselves in DANGEROUS_PREFIXES (the
         // supply-chain and secrets categories), so neither is a valid "safe"
         // fixture — a first draft used both and failed, which was the fixture
@@ -296,8 +151,26 @@ mod chained_bypass_tests {
     /// The scan stays bounded per segment; it did not silently become an
     /// unbounded whole-command scan.
     #[test]
+    fn the_defaults_come_from_the_data_file_and_config_extends_and_trims_them() {
+        let d = PrefixPrefilter::default();
+        assert!(!d.is_safe("kubectl get pods"));
+        assert!(d.is_safe("frobnicate --all"));
+        let o = PrefilterOverrides {
+            extra_commands: vec!["frobnicate".into()],
+            removed_commands: vec!["kubectl".into()],
+            extra_keywords: vec!["WIPE ALL".into()],
+            extra_markers: vec!["%%".into()],
+        };
+        let c = PrefixPrefilter::configured(&o);
+        assert!(!c.is_safe("frobnicate --all"));
+        assert!(c.is_safe("kubectl get pods"));
+        assert!(!c.is_safe("tool wipe all now"));
+        assert!(!c.is_safe("tool %% now"));
+    }
+
+    #[test]
     fn the_scan_is_still_bounded_within_a_segment() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         // `rmdir` prefix-matches `rm`, but sits at word 6 of its segment — past
         // the 3-word window. (`echo` cannot lead this fixture: it is itself a
         // dangerous prefix.)

@@ -608,8 +608,9 @@ fn cmd_validate() -> Result<()> {
     let engine = build_engine()?;
     let user_config = config::load_user_config(&config::config_path())?;
     let mut failures = Vec::new();
+    let prefilter = guardrail::engine::PrefixPrefilter::from_user_config();
     for rule in engine.rules() {
-        let single = RegexEngine::new(vec![rule.clone()])?;
+        let single = RegexEngine::with_prefilter(vec![rule.clone()], prefilter.clone())?;
         if let Some(t) = &rule.test_block {
             if matches!(single.check(t), Decision::Allow) {
                 failures.push(format!("{}: test_block does not match: {t}", rule.name));

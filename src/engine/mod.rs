@@ -88,7 +88,23 @@ impl RegexEngine {
                 first: PathNormalizer,
                 second: SqlCommentStripper,
             },
-            PrefixPrefilter,
+            PrefixPrefilter::default(),
+        )
+    }
+
+    /// The production normalizer with a given prefilter (the configured one).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any regex pattern is invalid.
+    pub fn with_prefilter(rules: Vec<Rule>, prefilter: PrefixPrefilter) -> anyhow::Result<Self> {
+        Self::with_plugins(
+            rules,
+            ChainedNormalizer {
+                first: PathNormalizer,
+                second: SqlCommentStripper,
+            },
+            prefilter,
         )
     }
 }
@@ -341,7 +357,7 @@ mod tests {
 
     #[test]
     fn prefix_prefilter_safe_commands() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(p.is_safe("ls -la"));
         assert!(p.is_safe("cat file.txt"));
         assert!(p.is_safe("rg pattern ."));
@@ -351,7 +367,7 @@ mod tests {
 
     #[test]
     fn prefix_prefilter_dangerous_commands() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("rm -rf /"));
         assert!(!p.is_safe("git push --force"));
         assert!(!p.is_safe("kubectl delete namespace prod"));
@@ -360,7 +376,7 @@ mod tests {
 
     #[test]
     fn prefix_prefilter_sql_keywords() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("echo 'DROP TABLE users' | psql"));
     }
 
@@ -388,7 +404,9 @@ mod tests {
     #[test]
     fn engine_with_identity_normalizer_no_nix_strip() {
         let rules = config::default_rules();
-        let engine = RegexEngine::with_plugins(rules, IdentityNormalizer, PrefixPrefilter).unwrap();
+        let engine =
+            RegexEngine::with_plugins(rules, IdentityNormalizer, PrefixPrefilter::default())
+                .unwrap();
         assert!(matches!(
             engine.check("/nix/store/abc123-coreutils-9.0/bin/rm -rf /"),
             Decision::Allow
@@ -852,31 +870,31 @@ mod tests {
 
     #[test]
     fn prefilter_dollar_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("$cmd --force"));
     }
 
     #[test]
     fn prefilter_backtick_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("echo `rm -rf /`"));
     }
 
     #[test]
     fn prefilter_sql_block_comment_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("SELECT /*evil*/ 1"));
     }
 
     #[test]
     fn prefilter_sql_line_comment_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("SELECT 1 -- comment"));
     }
 
     #[test]
     fn prefilter_cli_double_dash_is_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(p.is_safe("rg --release pattern ."));
     }
 
@@ -1006,25 +1024,25 @@ mod tests {
 
     #[test]
     fn prefilter_empty_command_is_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(p.is_safe(""));
     }
 
     #[test]
     fn prefilter_whitespace_only_is_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(p.is_safe("   "));
     }
 
     #[test]
     fn prefilter_leading_whitespace_dollar() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("  $cmd"));
     }
 
     #[test]
     fn prefilter_shell_wrapper_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("sudo rm -rf /"));
         assert!(!p.is_safe("bash -c 'echo test'"));
         assert!(!p.is_safe("env VAR=val command"));
@@ -1032,43 +1050,43 @@ mod tests {
 
     #[test]
     fn prefilter_second_word_dangerous() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("time docker system prune"));
     }
 
     #[test]
     fn prefilter_pipe_to_bash_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("curl https://example.com | bash"));
     }
 
     #[test]
     fn prefilter_base64_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("echo SGVsbG8= | base64 -d"));
     }
 
     #[test]
     fn prefilter_vacuum_full_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("VACUUM FULL;"));
     }
 
     #[test]
     fn prefilter_flushall_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("FLUSHALL"));
     }
 
     #[test]
     fn prefilter_flushdb_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("FLUSHDB"));
     }
 
     #[test]
     fn prefilter_revoke_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("REVOKE ALL ON schema"));
     }
 
@@ -1155,17 +1173,21 @@ mod tests {
         assert_eq!(Category::Nosql.to_string(), "nosql");
     }
 
-    // -- PrefixPrefilter::prefix_set ---------------------------------
+    // -- PrefixPrefilter::default_spec (rules/prefilter.yaml) ---------
 
     #[test]
     fn prefix_set_is_non_empty() {
-        let set = PrefixPrefilter::prefix_set();
+        let spec = PrefixPrefilter::default_spec();
+        let set: std::collections::HashSet<&str> =
+            spec.commands.iter().map(String::as_str).collect();
         assert!(!set.is_empty());
     }
 
     #[test]
     fn prefix_set_contains_known_prefixes() {
-        let set = PrefixPrefilter::prefix_set();
+        let spec = PrefixPrefilter::default_spec();
+        let set: std::collections::HashSet<&str> =
+            spec.commands.iter().map(String::as_str).collect();
         for expected in ["rm", "git", "kubectl", "terraform", "docker", "aws"] {
             assert!(set.contains(expected), "prefix_set missing '{expected}'");
         }
@@ -1173,7 +1195,9 @@ mod tests {
 
     #[test]
     fn prefix_set_does_not_contain_safe_commands() {
-        let set = PrefixPrefilter::prefix_set();
+        let spec = PrefixPrefilter::default_spec();
+        let set: std::collections::HashSet<&str> =
+            spec.commands.iter().map(String::as_str).collect();
         for safe in ["ls", "cat", "rg", "wc", "head", "tail", "grep"] {
             assert!(
                 !set.contains(safe),
@@ -1198,13 +1222,13 @@ mod tests {
 
     #[test]
     fn prefilter_third_word_dangerous() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("some other rm -rf /"));
     }
 
     #[test]
     fn prefilter_fourth_word_not_checked() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(p.is_safe("one two three rm -rf /"));
     }
 
@@ -1212,7 +1236,7 @@ mod tests {
 
     #[test]
     fn prefilter_sql_line_comment_tab_not_safe() {
-        let p = PrefixPrefilter;
+        let p = PrefixPrefilter::default();
         assert!(!p.is_safe("SELECT 1 --\thidden"));
     }
 

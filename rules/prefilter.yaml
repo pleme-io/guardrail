@@ -1,0 +1,198 @@
+# Prefilter data: commands, keywords and markers that send a command to the
+# rule engine. Anything matching none of them is skipped as safe (~50ns).
+# A rule whose command is missing here never fires: `guardrail validate`
+# fails its test_block. Extend or trim per machine with guardrail.yaml
+# `prefilter.extraCommands` / `removedCommands` / `extraKeywords` / `extraMarkers`.
+
+# A segment's first three words are compared: exact match, or the word starts
+# with the entry.
+commands:
+  # filesystem
+  - "rm"
+  - "dd"
+  - "mkfs"
+  - "chmod"
+  - "chown"
+  - "mv"
+  - "truncate"
+  - "shred"
+  # git
+  - "git"
+  # database / SQL
+  - "psql"
+  - "mysql"
+  - "sqlite3"
+  - "sqlcmd"
+  - "sqlx"
+  - "diesel"
+  - "prisma"
+  - "liquibase"
+  - "flyway"
+  - "knex"
+  - "rails"
+  - "rake"
+  - "python"
+  - "django-admin"
+  - "mongosh"
+  - "mongo"
+  # kubernetes
+  - "kubectl"
+  - "helm"
+  - "flux"
+  # cloud
+  - "aws"
+  - "gcloud"
+  - "gsutil"
+  - "az"
+  - "bq"
+  # nix
+  - "nix"
+  - "nix-collect-garbage"
+  # docker
+  - "docker"
+  # secrets
+  - "sops"
+  - "echo"
+  # terraform / iac
+  #
+  # `tofu` is the OpenTofu binary — a drop-in successor to `terraform` and
+  # what this fleet actually invokes. Its absence here was a silent hole: the
+  # prefilter fast-rejects before the DFA runs, so ANY `tofu` rule — existing
+  # or future — never reached the engine at all. A rule that cannot be
+  # reached is a guard over zero subjects.
+  - "terraform"
+  - "tofu"
+  - "terragrunt"
+  - "argocd"
+  - "pulumi"
+  - "ansible-playbook"
+  # stream editors
+  #
+  # In-place edits (`sed -i`, `perl -i`) of a file that stays are the class
+  # this covers: the editor cannot see the file's grammar, so it can leave
+  # something that still parses but means something else.
+  - "sed"
+  - "perl"
+  - "awk"
+  # scratch interpreters used as editing tools
+  #
+  # The sibling shape of the stream editors above, and where the reflex goes
+  # once `sed -i` is blocked: a throwaway heredoc that opens the same file
+  # and rewrites it. `python` was already present (for django/rails-adjacent
+  # reasons); `ruby` and `node` were NOT, so `scratch-interpreter-file-
+  # mutation` fast-rejected before the DFA ran and could not fire on them at
+  # all — the same unreachability recorded above for `tofu`. Caught by that
+  # rule's own test, which is the argument for pairing every new rule with a
+  # must-fire case rather than eyeballing the pattern.
+  - "ruby"
+  - "node"
+  # akeyless
+  - "akeyless"
+  - "aky"
+  # process
+  - "kill"
+  - "killall"
+  - "pkill"
+  - "shutdown"
+  - "poweroff"
+  - "halt"
+  - "reboot"
+  - "systemctl"
+  - "launchctl"
+  # network
+  - "iptables"
+  - "ufw"
+  - "ip"
+  - "nft"
+  # nosql
+  - "redis-cli"
+  # curl/wget (pipe install, elasticsearch)
+  - "curl"
+  - "wget"
+  # mysql admin
+  - "mysqladmin"
+  # shell wrappers -- commands that execute other commands
+  - "sh"
+  - "bash"
+  - "zsh"
+  - "fish"
+  - "dash"
+  - "env"
+  - "sudo"
+  - "doas"
+  - "nohup"
+  - "nice"
+  - "timeout"
+  # eval / indirect execution
+  - "eval"
+  - "xargs"
+  - "find"
+  # scheduling
+  - "crontab"
+  - "at"
+  # disk partitioning
+  - "fdisk"
+  - "parted"
+  - "wipefs"
+  # sync/publish (supply chain)
+  - "npm"
+  - "cargo"
+  - "gem"
+  - "pip"
+  - "twine"
+  # remote sync
+  - "rsync"
+  - "rclone"
+  # log wiping
+  - "journalctl"
+  # ssh (remote command execution)
+  - "ssh"
+  # pgrep — NOT destructive, and the only entry here that is not.
+  #
+  # It earns its place because `pgrep -f PATTERN` matches full command lines
+  # INCLUDING the shell running the loop, whose own argv contains PATTERN. So
+  # `until ! pgrep -f 'x'; do sleep; done` is true because of the waiter and
+  # hangs forever. Hit twice in one session (2026-08-02/03) — once wedging a
+  # rebuild wait, once falsely reporting a rebuild in flight.
+  #
+  # Without this entry the rule is unreachable: a command starting with
+  # `until`/`while` is fast-rejected before the DFA runs, so the regex never
+  # sees it. That is why `pgrep-f-self-matching-wait` was withdrawn on
+  # 2026-08-02 and is only viable now.
+  #
+  # Cost is real but small: `is_safe` does a `contains` plus a linear
+  # `starts_with` scan over this set for each of the first 3 words per
+  # segment, so one more entry is one more short comparison on the hot path —
+  # paid to make a footgun catchable rather than re-learnable.
+  - "pgrep"
+  # macOS preferences — `defaults write|delete|import` mutates the defaults
+  # DB outside nix-darwin, which is how cid and ryn drifted to two different
+  # Spaces-swipe animations with identical declared config (2026-09-21).
+  # Both spellings: `starts_with` never sees `defaults` inside the
+  # absolute path.
+  - "defaults"
+  - "/usr/bin/defaults"
+
+# Matched anywhere in the command, ASCII case-insensitive.
+keywords:
+  - "DROP "
+  - "TRUNCATE "
+  - "DELETE FROM"
+  - "REVOKE "
+  - "FLUSHALL"
+  - "FLUSHDB"
+  - "VACUUM FULL"
+  - "BASE64"
+  - "| BASH"
+  - "| SH"
+
+# Matched anywhere in the command, byte for byte.
+markers:
+  - "`"
+  - "/*"
+  - "-- "
+  - "--\t"
+
+# Matched at the start of the command, after leading whitespace.
+startMarkers:
+  - "$"

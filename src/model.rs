@@ -319,6 +319,34 @@ pub struct GuardrailConfig {
     pub tool_input_limits: Vec<ToolInputLimit>,
     #[serde(default)]
     pub change_windows: Vec<ChangeWindow>,
+    #[serde(default)]
+    pub prefilter: PrefilterOverrides,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrefilterSpec {
+    #[serde(default)]
+    pub commands: Vec<String>,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub markers: Vec<String>,
+    #[serde(default)]
+    pub start_markers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrefilterOverrides {
+    #[serde(default)]
+    pub extra_commands: Vec<String>,
+    #[serde(default)]
+    pub removed_commands: Vec<String>,
+    #[serde(default)]
+    pub extra_keywords: Vec<String>,
+    #[serde(default)]
+    pub extra_markers: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

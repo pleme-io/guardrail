@@ -18,13 +18,18 @@ use crate::model::Rule;
 /// The compiled-rules cache the hook uses.
 #[must_use]
 pub fn fs_cache() -> FsCache {
-    FsCache { path: FsCache::default_path() }
+    FsCache {
+        path: FsCache::default_path(),
+    }
 }
 
 /// What invalidates that cache: the config file and the rules directory.
 #[must_use]
 pub fn fs_fingerprinter() -> FsFingerprinter {
-    FsFingerprinter { config_path: config::config_path(), rules_dir: config::rules_dir() }
+    FsFingerprinter {
+        config_path: config::config_path(),
+        rules_dir: config::rules_dir(),
+    }
 }
 
 /// Defaults + `rules.d/` + the user's `guardrail.yaml`, resolved.
@@ -33,14 +38,20 @@ pub fn fs_fingerprinter() -> FsFingerprinter {
 /// An unreadable config or rules directory, or a rule set that fails to resolve.
 pub fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
     let defaults = DefaultsProvider;
-    let rules_d = DirectoryProvider { dir: config::rules_dir() };
+    let rules_d = DirectoryProvider {
+        dir: config::rules_dir(),
+    };
     let user_config = config::load_user_config(&config::config_path())
         .context("loading guardrail config")
-        .map_err(|e| HayaiError::Io { source: std::io::Error::other(e.to_string()) })?;
+        .map_err(|e| HayaiError::Io {
+            source: std::io::Error::other(e.to_string()),
+        })?;
     let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
     config::resolve(&providers, &user_config)
         .context("resolving rules")
-        .map_err(|e| HayaiError::Io { source: std::io::Error::other(e.to_string()) })
+        .map_err(|e| HayaiError::Io {
+            source: std::io::Error::other(e.to_string()),
+        })
 }
 
 /// The engine the hook runs — cached rule resolution, compiled RegexSet.
@@ -49,7 +60,8 @@ pub fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
 /// Rule resolution or RegexSet compilation failure.
 pub fn production_engine() -> Result<RegexEngine> {
     let rules = cache::resolve_cached(&fs_cache(), &fs_fingerprinter(), resolve_all_rules)?;
-    RegexEngine::new(rules).context("compiling RegexSet")
+    RegexEngine::with_prefilter(rules, crate::engine::PrefixPrefilter::from_user_config())
+        .context("compiling RegexSet")
 }
 
 #[cfg(test)]

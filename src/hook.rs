@@ -243,7 +243,7 @@ pub fn parse_stdin() -> anyhow::Result<HookInput> {
 #[must_use]
 pub fn scan_content_lines(content: &str) -> Vec<String> {
     use crate::engine::{Prefilter, PrefixPrefilter};
-    let prefilter = PrefixPrefilter;
+    let prefilter = PrefixPrefilter::from_user_config();
     content
         .lines()
         .map(str::trim)
