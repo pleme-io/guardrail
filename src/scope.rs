@@ -345,8 +345,8 @@ mod tests {
 
     #[test]
     fn scoped_examples_carry_their_tool_and_cwd() {
-        let mut rule = Rule::builder("akl-force-push", r"git\s+push\b.*(--force|\s-f\b)")
-            .cwd("/akeylesslabs/")
+        let mut rule = Rule::builder("team-force-push", r"git\s+push\b.*(--force|\s-f\b)")
+            .cwd("/team-org/")
             .build();
         let at = |input: &str, cwd: &str| {
             Example::Call(ExampleCall {
@@ -357,11 +357,11 @@ mod tests {
         };
         rule.examples
             .block
-            .push(at("git push -f", "/c/akeylesslabs/r"));
+            .push(at("git push -f", "/c/team-org/r"));
         rule.examples.allow.push(at("git push -f", "/c/pleme-io/r"));
         rule.examples
             .allow
-            .push(at("git push", "/c/akeylesslabs/r"));
+            .push(at("git push", "/c/team-org/r"));
         let pf = crate::engine::PrefixPrefilter::default();
         assert!(example_failures(&rule, &pf).is_empty());
         rule.examples.block.push(at("git push -f", "/c/pleme-io/r"));
@@ -416,10 +416,10 @@ mod tests {
     }
 
     fn force_push() -> Rule {
-        Rule::builder("akl-force-push", r"git\s+push\b.*(--force|\s-f\b)")
-            .message("no force push in akeylesslabs")
+        Rule::builder("team-force-push", r"git\s+push\b.*(--force|\s-f\b)")
+            .message("no force push in team-org")
             .category(Category::try_from("git".to_owned()).unwrap())
-            .cwd("/akeylesslabs/")
+            .cwd("/team-org/")
             .build()
     }
 
@@ -430,7 +430,7 @@ mod tests {
         assert!(
             s.check(&call(
                 "Bash",
-                Some("/Users/x/code/github/akeylesslabs/repo"),
+                Some("/Users/x/code/github/team-org/repo"),
                 push.clone()
             ))
             .is_blocked()

@@ -94,7 +94,7 @@ Rule format:
   window: team-production       # optional: allowed only inside an open change window with this tag
   tools: [Write, Edit]          # optional: exact tool names; unset = the tools check scans (Bash, Write, Edit, NotebookEdit, mcp__*)
   field: file_path              # optional: the tool_input field matched; unset = the fields check scans for the tool
-  cwd: '/akeylesslabs/'         # optional: regex the hook payload's cwd must match
+  cwd: '/team-org/'         # optional: regex the hook payload's cwd must match
 ```
 
 A rule with `tools`, `field` or `cwd` is scoped: it is matched on its own

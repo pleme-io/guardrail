@@ -831,14 +831,14 @@ fn validate_does_not_fail_on_an_unread_window_file() {
 
 const SCOPED: &str = r#"
 extraRules:
-  - name: akl-force-push
+  - name: team-force-push
     pattern: 'git\s+push\b.*(--force|\s-f\b)'
     severity: block
-    message: "no force push in akeylesslabs"
+    message: "no force push in team-org"
     category: git
-    cwd: "/akeylesslabs/"
+    cwd: "/team-org/"
     examples:
-      block: [{input: "git push -f origin x", cwd: "/c/akeylesslabs/r"}]
+      block: [{input: "git push -f origin x", cwd: "/c/team-org/r"}]
       allow: [{input: "git push -f origin x", cwd: "/c/pleme-io/r"}]
   - name: claude-files
     pattern: '^/Users/[^/]+/\.claude/(skills|CLAUDE\.md|settings\.json)'
@@ -866,10 +866,10 @@ extraRules:
 fn a_cwd_scoped_rule_blocks_only_under_its_cwd() {
     let (config, cache) = hook_config(SCOPED);
     guardrail_in(&config, &cache, &["check"])
-        .write_stdin(r#"{"tool_name":"Bash","cwd":"/Users/x/code/github/akeylesslabs/repo","tool_input":{"command":"git push --force-with-lease origin feat"}}"#)
+        .write_stdin(r#"{"tool_name":"Bash","cwd":"/Users/x/code/github/team-org/repo","tool_input":{"command":"git push --force-with-lease origin feat"}}"#)
         .assert()
         .failure()
-        .stdout(predicate::str::contains("akl-force-push"));
+        .stdout(predicate::str::contains("team-force-push"));
     guardrail_in(&config, &cache, &["check"])
         .write_stdin(r#"{"tool_name":"Bash","cwd":"/Users/x/code/github/pleme-io/repo","tool_input":{"command":"git push --force-with-lease origin feat"}}"#)
         .assert()
@@ -924,13 +924,13 @@ fn validate_runs_scoped_examples_and_checks_hook_registration() {
     )
     .assert()
     .success();
-    let broken = SCOPED.replace("cwd: \"/c/pleme-io/r\"", "cwd: \"/c/akeylesslabs/q\"");
+    let broken = SCOPED.replace("cwd: \"/c/pleme-io/r\"", "cwd: \"/c/team-org/q\"");
     let (config, cache) = hook_config(&broken);
     guardrail_in(&config, &cache, &["validate"])
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "akl-force-push: allow example matches",
+            "team-force-push: allow example matches",
         ));
 }
 
@@ -989,7 +989,7 @@ fn an_invalid_entry_in_a_window_file_never_opens_while_its_siblings_do() {
     windowed_config(&dir, "windows.json");
     fs::write(
         dir.path().join("guardrail/windows.json"),
-        r#"{"generatedAt":"x","changeWindows":[{"name":"bad","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z","extra":1},{"name":"ASM-2","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z"}]}"#,
+        r#"{"generatedAt":"x","changeWindows":[{"name":"bad","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z","extra":1},{"name":"TICKET-2","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z"}]}"#,
     )
     .unwrap();
     Command::cargo_bin("guardrail")
@@ -1000,7 +1000,7 @@ fn an_invalid_entry_in_a_window_file_never_opens_while_its_siblings_do() {
         .assert()
         .success()
         .stderr(predicate::str::contains(
-            "allowed inside change window ASM-2",
+            "allowed inside change window TICKET-2",
         ));
 }
 
