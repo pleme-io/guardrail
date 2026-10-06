@@ -755,3 +755,76 @@ fn validate_refuses_a_bad_hook_entry() {
         .assert()
         .success();
 }
+
+fn windowed_config(dir: &TempDir, window_file: &str) {
+    let config_dir = dir.path().join("guardrail");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::write(
+        config_dir.join("guardrail.yaml"),
+        format!(
+            r#"
+extraRules:
+  - name: team-live-cordon
+    pattern: "kubectl\\s+--context\\s+team-live\\S*\\s+cordon"
+    severity: block
+    message: "a live cordon only inside a window"
+    category: team
+    window: team-live
+changeWindowFiles:
+  - {window_file}
+"#
+        ),
+    )
+    .unwrap();
+}
+
+const LIVE_CORDON: &str = r#"{"tool_name":"Bash","tool_input":{"command":"kubectl --context team-live-1 cordon node-1"}}"#;
+
+#[test]
+fn a_window_from_a_window_file_opens_its_tagged_rule() {
+    let dir = TempDir::new().unwrap();
+    windowed_config(&dir, "windows.json");
+    fs::write(
+        dir.path().join("guardrail/windows.json"),
+        r#"{"changeWindows":[{"name":"ASM-1","tag":"team-live","start":"2000-01-01T00:00:00Z","end":"2999-01-01T00:00:00Z"}]}"#,
+    )
+    .unwrap();
+    Command::cargo_bin("guardrail")
+        .unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(LIVE_CORDON)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "allowed inside change window ASM-1",
+        ));
+}
+
+#[test]
+fn a_missing_window_file_keeps_the_tagged_rule_closed_and_names_the_file() {
+    let dir = TempDir::new().unwrap();
+    windowed_config(&dir, "absent.json");
+    Command::cargo_bin("guardrail")
+        .unwrap()
+        .args(["check"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .write_stdin(LIVE_CORDON)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("absent.json"));
+}
+
+#[test]
+fn validate_does_not_fail_on_an_unread_window_file() {
+    let dir = TempDir::new().unwrap();
+    windowed_config(&dir, "absent.json");
+    Command::cargo_bin("guardrail")
+        .unwrap()
+        .args(["validate"])
+        .env("XDG_CONFIG_HOME", dir.path())
+        .env("XDG_CACHE_HOME", dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("window file not read"));
+}

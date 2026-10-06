@@ -97,6 +97,14 @@ Rule format:
 `guardrail validate` runs every rule's block and allow examples and checks the
 declared change windows; a failure exits non-zero.
 
+Windows come from `changeWindows` in `guardrail.yaml` plus every file in
+`changeWindowFiles` (absolute, or relative to `~/.config/guardrail/`), each a
+`{changeWindows: [...]}` document written at run time by a sync job (for
+example from approved tickets). The files are read on every windowed block; a
+missing or unparseable file opens nothing and is named in the block message,
+and an invalid entry never opens while its valid siblings do. `validate`
+reports file problems without failing, since the files are run-time data.
+
 ## Categories
 
 A category is any lowercase name (`[a-z0-9_-]+`) a suite chooses; the

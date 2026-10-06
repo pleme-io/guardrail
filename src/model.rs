@@ -297,6 +297,8 @@ pub struct GuardrailConfig {
     #[serde(default)]
     pub change_windows: Vec<ChangeWindow>,
     #[serde(default)]
+    pub change_window_files: Vec<String>,
+    #[serde(default)]
     pub prefilter: PrefilterOverrides,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub hooks: crate::dispatch::HookTable,
@@ -335,6 +337,13 @@ pub struct ChangeWindow {
     pub tag: String,
     pub start: String,
     pub end: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeWindowFile {
+    #[serde(default)]
+    pub change_windows: Vec<ChangeWindow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

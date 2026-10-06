@@ -155,9 +155,10 @@ fn check_command_item(
 }
 
 fn gate_on_window(rule: &str, message: &str, tag: &str) -> Option<(String, String)> {
-    let windows = guardrail::config::load_user_config(&guardrail::config::config_path())
-        .map(|c| c.change_windows)
-        .unwrap_or_default();
+    let (windows, problems) =
+        guardrail::config::load_user_config(&guardrail::config::config_path())
+            .map(|c| guardrail::windows::effective(&c, &guardrail::config::config_dir()))
+            .unwrap_or_default();
     if let Some(w) = guardrail::windows::open_window(&windows, tag, guardrail::windows::now_unix())
     {
         eprintln!(
@@ -176,10 +177,15 @@ fn gate_on_window(rule: &str, message: &str, tag: &str) -> Option<(String, Strin
     } else {
         declared.join(", ")
     };
+    let unread = if problems.is_empty() {
+        String::new()
+    } else {
+        format!(" Unread window files: {}.", problems.join("; "))
+    };
     Some((
         rule.to_string(),
         format!(
-            "{message} Only inside a `{tag}` change window; open now: none; declared: {declared}."
+            "{message} Only inside a `{tag}` change window; open now: none; declared: {declared}.{unread}"
         ),
     ))
 }
@@ -727,6 +733,17 @@ fn cmd_validate() -> Result<()> {
         }
     }
     failures.extend(dispatch::validate(&user_config.hooks));
+    let (file_windows, window_file_problems) =
+        guardrail::windows::from_files(&user_config.change_window_files, &config::config_dir());
+    for p in &window_file_problems {
+        eprintln!("guardrail: window file not read (opens nothing): {p}");
+    }
+    for w in guardrail::windows::invalid(&file_windows) {
+        eprintln!(
+            "guardrail: window file entry {} never opens: start and end must be UTC (Z) with start < end: {}..{}",
+            w.name, w.start, w.end
+        );
+    }
     for w in guardrail::windows::invalid(&user_config.change_windows) {
         failures.push(format!(
             "change window {}: start and end must be UTC (Z) with start < end: {}..{}",
@@ -740,11 +757,13 @@ fn cmd_validate() -> Result<()> {
         anyhow::bail!("{} rule test, window or hook failure(s)", failures.len());
     }
     eprintln!(
-        "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows); every rule's block and allow examples hold",
+        "guardrail: config valid ({} rules active, {} disabled, {} extra, {} change windows, {} from {} window files); every rule's block and allow examples hold",
         engine.rule_count(),
         user_config.disabled_rules.len(),
         user_config.extra_rules.len(),
         user_config.change_windows.len(),
+        file_windows.len(),
+        user_config.change_window_files.len(),
     );
     Ok(())
 }

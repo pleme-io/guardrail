@@ -1,6 +1,7 @@
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::model::ChangeWindow;
+use crate::model::{ChangeWindow, ChangeWindowFile, GuardrailConfig};
 
 #[must_use]
 pub fn parse_utc(s: &str) -> Option<i64> {
@@ -63,6 +64,38 @@ pub fn invalid(windows: &[ChangeWindow]) -> Vec<&ChangeWindow> {
         .collect()
 }
 
+#[must_use]
+pub fn from_files(paths: &[String], base: &Path) -> (Vec<ChangeWindow>, Vec<String>) {
+    let mut windows = Vec::new();
+    let mut problems = Vec::new();
+    for p in paths {
+        let path = base.join(p);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) => {
+                problems.push(format!("{}: {e}", path.display()));
+                continue;
+            }
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        match serde_yaml::from_str::<ChangeWindowFile>(&text) {
+            Ok(f) => windows.extend(f.change_windows),
+            Err(e) => problems.push(format!("{}: {e}", path.display())),
+        }
+    }
+    (windows, problems)
+}
+
+#[must_use]
+pub fn effective(config: &GuardrailConfig, base: &Path) -> (Vec<ChangeWindow>, Vec<String>) {
+    let (from_files, problems) = from_files(&config.change_window_files, base);
+    let mut windows = config.change_windows.clone();
+    windows.extend(from_files);
+    (windows, problems)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,5 +152,58 @@ mod tests {
         ];
         assert!(open_window(&ws, "t", parse_utc("2026-10-11T12:00:00Z").unwrap()).is_none());
         assert_eq!(invalid(&ws).len(), 2);
+    }
+
+    #[test]
+    fn window_files_merge_with_inline_windows_and_resolve_relative_to_the_base() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("jira.json"),
+            r#"{"changeWindows":[{"name":"ASM-1","tag":"t","start":"2026-10-11T06:00:00Z","end":"2026-10-11T10:00:00Z"}],"generatedAt":"2026-10-06T00:00:00Z"}"#,
+        )
+        .unwrap();
+        let config = GuardrailConfig {
+            change_windows: vec![w("t", "2026-10-12T06:00:00Z", "2026-10-12T10:00:00Z")],
+            change_window_files: vec!["jira.json".into()],
+            ..GuardrailConfig::default()
+        };
+        let (ws, problems) = effective(&config, dir.path());
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(ws.len(), 2);
+        let at = |s: &str| parse_utc(s).unwrap();
+        assert_eq!(
+            open_window(&ws, "t", at("2026-10-11T07:00:00Z")).map(|w| w.name.as_str()),
+            Some("ASM-1")
+        );
+        assert_eq!(
+            open_window(&ws, "t", at("2026-10-12T07:00:00Z")).map(|w| w.name.as_str()),
+            Some("oct-11")
+        );
+    }
+
+    #[test]
+    fn a_missing_or_malformed_window_file_opens_nothing_and_says_why() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("bad.json"), "{not json").unwrap();
+        std::fs::write(dir.path().join("empty.json"), "").unwrap();
+        let abs = dir.path().join("absent.json").display().to_string();
+        let (ws, problems) = from_files(&["bad.json".into(), "empty.json".into(), abs], dir.path());
+        assert!(ws.is_empty());
+        assert_eq!(problems.len(), 2, "{problems:?}");
+    }
+
+    #[test]
+    fn an_invalid_entry_in_a_file_never_opens_while_its_valid_sibling_does() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("w.yaml"),
+            "changeWindows:\n  - {name: bad, tag: t, start: '2026-10-11T10:00:00Z', end: '2026-10-11T06:00:00Z'}\n  - {name: good, tag: t, start: '2026-10-11T06:00:00Z', end: '2026-10-11T10:00:00Z'}\n",
+        )
+        .unwrap();
+        let (ws, problems) = from_files(&["w.yaml".into()], dir.path());
+        assert!(problems.is_empty());
+        assert_eq!(invalid(&ws).len(), 1);
+        let open = open_window(&ws, "t", parse_utc("2026-10-11T07:00:00Z").unwrap());
+        assert_eq!(open.map(|w| w.name.as_str()), Some("good"));
     }
 }
