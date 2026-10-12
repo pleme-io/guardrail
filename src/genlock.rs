@@ -345,8 +345,20 @@ mod tests {
         sh(t.path(), &["add", "Cargo.lock"]);
         let elsewhere = tempfile::tempdir().expect("tempdir");
         let abs = t.path().display();
-        assert!(block(&input(elsewhere.path(), &format!("cd {abs} && git commit -qm x"))).is_some());
-        assert!(block(&input(elsewhere.path(), &format!("cd '{abs}'; git add -A; git commit -m x"))).is_some());
+        assert!(
+            block(&input(
+                elsewhere.path(),
+                &format!("cd {abs} && git commit -qm x")
+            ))
+            .is_some()
+        );
+        assert!(
+            block(&input(
+                elsewhere.path(),
+                &format!("cd '{abs}'; git add -A; git commit -m x")
+            ))
+            .is_some()
+        );
         assert_eq!(block(&input(elsewhere.path(), "git commit -m x")), None);
     }
 

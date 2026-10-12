@@ -355,13 +355,9 @@ mod tests {
                 cwd: Some(cwd.into()),
             })
         };
-        rule.examples
-            .block
-            .push(at("git push -f", "/c/team-org/r"));
+        rule.examples.block.push(at("git push -f", "/c/team-org/r"));
         rule.examples.allow.push(at("git push -f", "/c/pleme-io/r"));
-        rule.examples
-            .allow
-            .push(at("git push", "/c/team-org/r"));
+        rule.examples.allow.push(at("git push", "/c/team-org/r"));
         let pf = crate::engine::PrefixPrefilter::default();
         assert!(example_failures(&rule, &pf).is_empty());
         rule.examples.block.push(at("git push -f", "/c/pleme-io/r"));
