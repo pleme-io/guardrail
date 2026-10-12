@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "e95619b924b241dc56ea94d14c8f1419927772cc38f5e3e5c76f909e9ebec0bc",
+  "cargo_lock_sha256": "c2a5b77921b72ddc553ec51cf8b017985db21c725234f68b8842e41639a3bb32",
   "manifest_sha256": {
-    "Cargo.toml": "44526f3d621d61a9826ff8ed237925ea9e96ad6fb98f76b11dc64031fb3f10e5"
+    "Cargo.toml": "4d5f95088d78d4ee8f540f371e139029f33d013afecdce66bc27dac78cde288d"
   },
   "target_resolves": {
     "base": {
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.20": {
+      "guardrail-0.1.21": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -751,7 +751,7 @@
           },
           {
             "name": "sha2",
-            "package_key": "sha2-0.11.0",
+            "package_key": "sha2-0.11.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1447,7 +1447,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "sha2-0.11.0": {
+      "sha2-0.11.1": {
         "runtime_dependencies": [
           {
             "name": "cfg_if",
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.20": {
+    "guardrail-0.1.21": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2683,7 +2683,7 @@
     "serde_yaml-0.9.34+deprecated": {
       "edition": "2021"
     },
-    "sha2-0.11.0": {
+    "sha2-0.11.1": {
       "edition": "2024"
     },
     "strsim-0.11.1": {
