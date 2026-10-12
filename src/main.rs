@@ -728,6 +728,8 @@ fn cmd_compile() -> Result<()> {
     let store = fs_cache();
     let fp = fs_fingerprinter().fingerprint();
     store.save(fp, &rules)?;
+    let index = guard.engine.index();
+    guardrail::production::index_cache().save(index.digest, index)?;
 
     eprintln!(
         "guardrail: compiled {} rules ({} scoped) -> {}",

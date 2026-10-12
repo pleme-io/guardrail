@@ -9,7 +9,7 @@ description = "Defensive guardrails for AI coding agents — block destructive c
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-hayai = "0.1"
+hayai = "0.1.3"
 hex = "0.4.3"
 # okiba (置き場) — XDG resolution where a RELATIVE or empty override is IGNORED
 # per spec rather than joined. default_journal_path took $XDG_RUNTIME_DIR

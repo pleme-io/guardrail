@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "1b90045ca8fd5ab4d1670b1a21c5cbde8e7ac251d87b42cb79ecacaf17fe2575",
+  "cargo_lock_sha256": "5e6b4629686c7a98b3689c4f5bd16a629acc22f5974910d9701c952bd7146c90",
   "manifest_sha256": {
-    "Cargo.toml": "320c9dd8a30919807b52e943f498e82f0bd84f2703b93e5378a97b7f1e8d6050"
+    "Cargo.toml": "aef723fd549185f664b07c2365b16ac8a3686555761c09802008f18080d11875"
   },
   "target_resolves": {
     "base": {
@@ -21,6 +21,7 @@
         ],
         "build_dependencies": [],
         "features": [
+          "default",
           "perf-literal",
           "std"
         ]
@@ -678,7 +679,7 @@
           },
           {
             "name": "hayai",
-            "package_key": "hayai-0.1.2",
+            "package_key": "hayai-0.1.3",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -767,11 +768,31 @@
         "build_dependencies": [],
         "features": []
       },
-      "hayai-0.1.2": {
+      "hayai-0.1.3": {
         "runtime_dependencies": [
+          {
+            "name": "aho_corasick",
+            "package_key": "aho-corasick-1.1.5",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
           {
             "name": "regex",
             "package_key": "regex-1.13.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "regex_syntax",
+            "package_key": "regex-syntax-0.8.11",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2566,7 +2587,7 @@
     "hashbrown-0.17.1": {
       "edition": "2024"
     },
-    "hayai-0.1.2": {
+    "hayai-0.1.3": {
       "edition": "2024"
     },
     "heck-0.5.0": {

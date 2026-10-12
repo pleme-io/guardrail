@@ -276,11 +276,13 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "hayai"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b81d6bc5f8678bcb57908ad3c4708e00ac9d664a1e907ccb7a7687bfdec3c164"
+checksum = "10f5b5b8d4c29fc963584d73f30cfa839e4dcdcd861dfe31c31e4535ebd0644a"
 dependencies = [
+ "aho-corasick",
  "regex",
+ "regex-syntax",
  "serde",
  "serde_json",
  "thiserror",

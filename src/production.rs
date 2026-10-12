@@ -10,9 +10,9 @@
 
 use anyhow::{Context, Result};
 
-use crate::cache::{self, FsCache, FsFingerprinter, HayaiError};
+use crate::cache::{self, CacheStore, FsCache, FsFingerprinter, HayaiError};
 use crate::config::{self, DefaultsProvider, DirectoryProvider, RuleProvider};
-use crate::engine::RegexEngine;
+use crate::engine::{LiteralIndex, ProductionNormalizer, RegexEngine};
 use crate::model::Rule;
 use crate::scope::ScopedRules;
 
@@ -72,9 +72,30 @@ pub fn production_rules() -> Result<Vec<Rule>> {
 /// # Errors
 /// `RegexSet` compilation failure.
 pub fn engine_for(rules: Vec<Rule>) -> Result<RegexEngine> {
-    let unscoped = rules.into_iter().filter(|r| !r.is_scoped()).collect();
-    RegexEngine::with_prefilter(unscoped, crate::engine::PrefixPrefilter::from_user_config())
-        .context("compiling RegexSet")
+    engine_through(&index_cache(), rules)
+}
+
+pub fn engine_through(
+    store: &dyn CacheStore<LiteralIndex>,
+    rules: Vec<Rule>,
+) -> Result<RegexEngine> {
+    let unscoped: Vec<Rule> = rules.into_iter().filter(|r| !r.is_scoped()).collect();
+    let prefilter = crate::engine::PrefixPrefilter::from_user_config();
+    let patterns: Vec<&str> = unscoped.iter().map(|r| r.pattern.as_str()).collect();
+    match LiteralIndex::through(store, &patterns) {
+        Ok(index) => {
+            RegexEngine::with_index(unscoped, index, ProductionNormalizer::default(), prefilter)
+        }
+        Err(_) => RegexEngine::with_prefilter(unscoped, prefilter),
+    }
+    .context("compiling RegexSet")
+}
+
+#[must_use]
+pub fn index_cache() -> hayai::cache::FsCache {
+    hayai::cache::FsCache::new(
+        config::xdg_dir("XDG_CACHE_HOME", ".cache").join("guardrail/literal-index.json"),
+    )
 }
 
 /// The engine the hook runs — cached rule resolution, compiled `RegexSet`,
@@ -143,5 +164,120 @@ mod tests {
         assert!(matches!(engine.check("rm -rf /"), Decision::Block { .. }));
         assert!(matches!(engine.check("rm -rf ./target"), Decision::Allow));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn witnesses() -> Vec<String> {
+        config::default_rules()
+            .iter()
+            .flat_map(|r| {
+                [
+                    crate::testing::derive_test_block(r),
+                    crate::testing::derive_test_allow(r),
+                ]
+            })
+            .chain(["ls -la".to_string(), "rm -rf /".to_string()])
+            .collect()
+    }
+
+    fn verdicts(engine: &RegexEngine) -> Vec<String> {
+        witnesses()
+            .iter()
+            .map(|w| engine.check(w).to_string())
+            .collect()
+    }
+
+    fn reference() -> Vec<String> {
+        let unscoped: Vec<Rule> = config::default_rules()
+            .into_iter()
+            .filter(|r| !r.is_scoped())
+            .collect();
+        let eager = hayai::RegexMatcher::with_plugins(
+            unscoped.iter().map(|r| r.pattern.as_str()),
+            ProductionNormalizer::default(),
+            crate::engine::PrefixPrefilter::from_user_config(),
+        )
+        .unwrap();
+        witnesses()
+            .iter()
+            .map(|w| {
+                use hayai::MatchEngine;
+                let hits = eager.check(w);
+                let rule = hits
+                    .iter()
+                    .map(|&i| &unscoped[i])
+                    .find(|r| r.severity == crate::model::Severity::Block)
+                    .or_else(|| hits.first().map(|&i| &unscoped[i]));
+                rule.map_or(Decision::Allow, Decision::from_rule)
+                    .to_string()
+            })
+            .collect()
+    }
+
+    fn cache_in(dir: &tempfile::TempDir) -> hayai::cache::FsCache {
+        hayai::cache::FsCache::new(dir.path().join("guardrail/literal-index.json"))
+    }
+
+    #[test]
+    fn a_missing_index_is_built_written_and_agrees_with_the_eager_set() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = cache_in(&dir);
+        let engine = engine_through(&store, config::default_rules()).unwrap();
+        assert!(store.path.exists());
+        assert_eq!(verdicts(&engine), reference());
+        let warm = engine_through(&store, config::default_rules()).unwrap();
+        assert_eq!(verdicts(&warm), reference());
+    }
+
+    #[test]
+    fn a_corrupt_index_falls_back_to_a_correct_engine() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = cache_in(&dir);
+        std::fs::create_dir_all(store.path.parent().unwrap()).unwrap();
+        std::fs::write(&store.path, b"{\"fingerprint\": 1, \"data\": [garbage").unwrap();
+        let engine = engine_through(&store, config::default_rules()).unwrap();
+        assert_eq!(verdicts(&engine), reference());
+        let reloaded: Option<(u64, LiteralIndex)> = store.load();
+        assert!(reloaded.is_some());
+    }
+
+    #[test]
+    fn a_stale_index_falls_back_to_a_correct_engine() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = cache_in(&dir);
+        let stale = LiteralIndex::build(&["rm\\s+-rf"]).unwrap();
+        store.save(stale.digest, &stale).unwrap();
+        let engine = engine_through(&store, config::default_rules()).unwrap();
+        assert_eq!(verdicts(&engine), reference());
+    }
+
+    #[test]
+    fn an_index_that_lies_about_its_digest_is_rebuilt() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = cache_in(&dir);
+        let rules = config::default_rules();
+        let patterns: Vec<&str> = rules
+            .iter()
+            .filter(|r| !r.is_scoped())
+            .map(|r| r.pattern.as_str())
+            .collect();
+        let mut lying = LiteralIndex::build(&patterns).unwrap();
+        lying.entries.truncate(1);
+        store.save(lying.digest, &lying).unwrap();
+        let engine = engine_through(&store, rules).unwrap();
+        assert_eq!(verdicts(&engine), reference());
+    }
+
+    #[test]
+    fn an_unwritable_cache_still_gives_a_correct_engine() {
+        let store = hayai::cache::FsCache::new("/dev/null/guardrail/literal-index.json");
+        let engine = engine_through(&store, config::default_rules()).unwrap();
+        assert_eq!(verdicts(&engine), reference());
+    }
+
+    #[test]
+    fn an_invalid_rule_still_fails_closed_to_an_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let rules = vec![Rule::builder("bad", "[invalid").build()];
+        assert!(engine_through(&cache_in(&dir), rules).is_err());
     }
 }

@@ -3,7 +3,8 @@ mod sql;
 
 use std::fmt;
 
-use hayai::engine::RegexMatcher;
+use hayai::LazyRegexMatcher;
+pub use hayai::LiteralIndex;
 pub use hayai::engine::{
     ChainedNormalizer, IdentityNormalizer, MatchEngine, Normalizer, NullPrefilter, PathNormalizer,
     Prefilter, contains_ascii_ci,
@@ -59,7 +60,7 @@ pub type NixStoreNormalizer = PathNormalizer;
 /// # }
 /// ```
 pub struct RegexEngine<N: Normalizer = ProductionNormalizer, P: Prefilter = PrefixPrefilter> {
-    matcher: RegexMatcher<N, P>,
+    matcher: LazyRegexMatcher<N, P>,
     rules: Vec<Rule>,
 }
 
@@ -116,8 +117,24 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
     /// Returns an error if any regex pattern is invalid.
     pub fn with_plugins(rules: Vec<Rule>, normalizer: N, prefilter: P) -> anyhow::Result<Self> {
         let patterns: Vec<String> = rules.iter().map(|r| r.pattern.clone()).collect();
-        let matcher = RegexMatcher::with_plugins(patterns, normalizer, prefilter)?;
+        let matcher = LazyRegexMatcher::with_plugins(patterns, normalizer, prefilter)?;
         Ok(Self { matcher, rules })
+    }
+
+    pub fn with_index(
+        rules: Vec<Rule>,
+        index: LiteralIndex,
+        normalizer: N,
+        prefilter: P,
+    ) -> anyhow::Result<Self> {
+        let patterns: Vec<&str> = rules.iter().map(|r| r.pattern.as_str()).collect();
+        let matcher = LazyRegexMatcher::with_index(patterns, index, normalizer, prefilter)?;
+        Ok(Self { matcher, rules })
+    }
+
+    #[must_use]
+    pub fn index(&self) -> &LiteralIndex {
+        self.matcher.index()
     }
 }
 
