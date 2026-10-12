@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "5e6b4629686c7a98b3689c4f5bd16a629acc22f5974910d9701c952bd7146c90",
+  "cargo_lock_sha256": "e95619b924b241dc56ea94d14c8f1419927772cc38f5e3e5c76f909e9ebec0bc",
   "manifest_sha256": {
-    "Cargo.toml": "aef723fd549185f664b07c2365b16ac8a3686555761c09802008f18080d11875"
+    "Cargo.toml": "44526f3d621d61a9826ff8ed237925ea9e96ad6fb98f76b11dc64031fb3f10e5"
   },
   "target_resolves": {
     "base": {
@@ -392,7 +392,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.6",
+            "package_key": "syn-3.0.9",
             "kind": "normal",
             "features": [
               "full"
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.19": {
+      "guardrail-0.1.20": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -731,7 +731,7 @@
           },
           {
             "name": "serde_json",
-            "package_key": "serde_json-1.0.151",
+            "package_key": "serde_json-1.0.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -814,7 +814,7 @@
           },
           {
             "name": "serde_json",
-            "package_key": "serde_json-1.0.151",
+            "package_key": "serde_json-1.0.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1068,7 +1068,7 @@
         "runtime_dependencies": [
           {
             "name": "unicode_ident",
-            "package_key": "unicode-ident-1.0.26",
+            "package_key": "unicode-ident-1.0.27",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1322,7 +1322,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.6",
+            "package_key": "syn-3.0.9",
             "kind": "normal",
             "features": [
               "clone-impls",
@@ -1342,7 +1342,7 @@
           "default"
         ]
       },
-      "serde_json-1.0.151": {
+      "serde_json-1.0.154": {
         "runtime_dependencies": [
           {
             "name": "itoa",
@@ -1492,7 +1492,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "syn-3.0.6": {
+      "syn-3.0.9": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -1516,7 +1516,7 @@
           },
           {
             "name": "unicode_ident",
-            "package_key": "unicode-ident-1.0.26",
+            "package_key": "unicode-ident-1.0.27",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1637,7 +1637,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.6",
+            "package_key": "syn-3.0.9",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1656,7 +1656,7 @@
           "const-generics"
         ]
       },
-      "unicode-ident-1.0.26": {
+      "unicode-ident-1.0.27": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.19": {
+    "guardrail-0.1.20": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2676,7 +2676,7 @@
       "edition": "2021",
       "proc_macro": true
     },
-    "serde_json-1.0.151": {
+    "serde_json-1.0.154": {
       "edition": "2021",
       "build_script": "build.rs"
     },
@@ -2689,7 +2689,7 @@
     "strsim-0.11.1": {
       "edition": "2015"
     },
-    "syn-3.0.6": {
+    "syn-3.0.9": {
       "edition": "2021"
     },
     "tempfile-3.27.0": {
@@ -2709,7 +2709,7 @@
     "typenum-1.20.1": {
       "edition": "2018"
     },
-    "unicode-ident-1.0.26": {
+    "unicode-ident-1.0.27": {
       "edition": "2021"
     },
     "unsafe-libyaml-0.2.11": {
