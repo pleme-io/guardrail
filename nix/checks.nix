@@ -130,6 +130,18 @@ let
       extraKeywords = [ "fixturekw" ];
       extraMarkers = [ "<<fixture>>" ];
     };
+    privateTerms = {
+      enable = true;
+      terms = [ "tenant-a" ];
+      termFiles = [ "fixture/deny.yaml" ];
+      publicRepos = [ "acme/widget" ];
+      visibilityFiles = [
+        {
+          path = "fixture/org.yaml";
+          owner = "acme";
+        }
+      ];
+    };
     hooks = {
       PreToolUse = [
         {
@@ -152,6 +164,10 @@ let
         }
         {
           action = "genLockTie";
+          matcher = "Bash";
+        }
+        {
+          action = "privateTermsGate";
           matcher = "Bash";
         }
         { action = "searchNudge"; }
@@ -189,6 +205,8 @@ let
     toolInputLimit = keysOf r.yaml.toolInputLimits;
     changeWindow = keysOf r.yaml.changeWindows;
     prefilter = builtins.attrNames r.yaml.prefilter;
+    privateTerms = builtins.attrNames r.yaml.privateTerms;
+    visibilityFile = keysOf r.yaml.privateTerms.visibilityFiles;
     actions = lib.unique (lib.concatMap (map (a: a.action)) (lib.attrValues r.yaml.hooks));
   };
 
@@ -200,6 +218,8 @@ let
     toolInputLimit = builtins.attrNames t.toolInputLimit;
     changeWindow = builtins.attrNames t.changeWindow;
     prefilter = builtins.attrNames t.prefilter;
+    privateTerms = builtins.attrNames t.privateTerms;
+    visibilityFile = builtins.attrNames t.visibilityFile;
     inherit (t) actions;
   };
 

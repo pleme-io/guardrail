@@ -1,39 +1,17 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::LazyLock;
 
-use regex::Regex;
 use sha2::{Digest, Sha256};
 
+use crate::gitcall::{self, GitCall, git};
 use crate::hook::HookInput;
 
 pub const RULE: &str = "gen-lock-tie";
 const GEN_LOCK: &str = "Cargo.gen.lock";
 
-static COMMIT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:^|[;&|(]\s*)git((?:\s+-C\s+\S+)*)\s+commit\b([^;&|)]*)").expect("valid regex")
-});
-
-static CD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:^|[;&|(]\s*)(?:cd|pushd)\s+([^\s;&|)]+)").expect("valid regex")
-});
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitCall {
-    pub cds: Vec<String>,
-    pub dirs: Vec<String>,
+    pub call: GitCall,
     pub all: bool,
-}
-
-fn expand_home(path: &str) -> PathBuf {
-    match (path.strip_prefix('~'), std::env::var_os("HOME")) {
-        (Some(rest), Some(home)) => PathBuf::from(home).join(rest.trim_start_matches('/')),
-        _ => PathBuf::from(path),
-    }
-}
-
-fn unquote(s: &str) -> &str {
-    s.trim_matches(|c| c == '"' || c == '\'')
 }
 
 fn is_all_flag(token: &str) -> bool {
@@ -72,20 +50,10 @@ fn takes_value(token: &str) -> bool {
 
 #[must_use]
 pub fn parse_commit(command: &str) -> Option<CommitCall> {
-    let caps = COMMIT.captures(command)?;
-    let start = caps.get(0).map_or(0, |m| m.start());
-    let cds = CD
-        .captures_iter(&command[..start])
-        .map(|c| unquote(&c[1]).to_string())
-        .collect();
-    let dirs = caps[1]
-        .split_whitespace()
-        .filter(|t| *t != "-C")
-        .map(|t| unquote(t).to_string())
-        .collect();
+    let call = gitcall::parse(command, "commit")?;
     let mut all = false;
     let mut skip = false;
-    for token in caps[2].split_whitespace() {
+    for token in call.args.split_whitespace() {
         if skip {
             skip = false;
             continue;
@@ -98,17 +66,7 @@ pub fn parse_commit(command: &str) -> Option<CommitCall> {
         }
         skip = takes_value(token);
     }
-    Some(CommitCall { cds, dirs, all })
-}
-
-fn git(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .ok()?;
-    out.status.success().then_some(out.stdout)
+    Some(CommitCall { call, all })
 }
 
 fn read(top: &Path, path: &str, all: bool) -> Option<Vec<u8>> {
@@ -176,16 +134,7 @@ pub fn check_repo(dir: &Path, all: bool) -> Tie {
 pub fn block(input: &HookInput) -> Option<(String, String)> {
     let command = input.tool_input.as_ref()?.command.as_deref()?;
     let call = parse_commit(command)?;
-    let mut dir = PathBuf::from(input.cwd.as_deref().unwrap_or("."));
-    for d in &call.cds {
-        let next = dir.join(expand_home(d));
-        if next.is_dir() {
-            dir = next;
-        }
-    }
-    for d in &call.dirs {
-        dir = dir.join(d);
-    }
+    let dir = gitcall::dir(input.cwd.as_deref(), &call.call);
     let staged = if call.all { "committed" } else { "staged" };
     match check_repo(&dir, call.all) {
         Tie::Fresh | Tie::Unreadable => None,
@@ -208,29 +157,8 @@ pub fn block(input: &HookInput) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gitcall::fixture::{sh, write};
     use crate::hook::ToolInput;
-
-    fn sh(dir: &Path, args: &[&str]) {
-        let ok = Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args(args)
-            .env("GIT_AUTHOR_NAME", "t")
-            .env("GIT_AUTHOR_EMAIL", "t@t")
-            .env("GIT_COMMITTER_NAME", "t")
-            .env("GIT_COMMITTER_EMAIL", "t@t")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .status()
-            .expect("git runs")
-            .success();
-        assert!(ok, "git {args:?}");
-    }
-
-    fn write(dir: &Path, path: &str, body: &str) {
-        let p = dir.join(path);
-        std::fs::create_dir_all(p.parent().expect("parent")).expect("mkdir");
-        std::fs::write(p, body).expect("write");
-    }
 
     fn gen_repo() -> tempfile::TempDir {
         let t = tempfile::tempdir().expect("tempdir");

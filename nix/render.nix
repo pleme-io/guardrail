@@ -52,6 +52,7 @@ let
       changeWindows
       changeWindowFiles
       prefilter
+      privateTerms
       ;
     extraRules = map renderRule cfg.extraRules;
   }

@@ -129,7 +129,34 @@ let
     extraMarkers = strList "Byte sequences that send a command to the rule engine.";
   };
 
-  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "genLockTie" "exec" ];
+  visibilityFile = {
+    path = mkOption {
+      type = types.str;
+      description = "A posture YAML file: `repos: [{name, visibility}]`, with `repo_defaults.visibility` for a repo that states none.";
+    };
+    owner = mkOption {
+      type = types.str;
+      description = "The account or org the file's repo names belong to.";
+    };
+  };
+
+  privateTerms = {
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Run the privateTermsGate action; with no terms it never blocks.";
+    };
+    terms = strList "Private terms, matched case-insensitively, bounded by non-alphanumerics, a camelCase join still matching.";
+    termFiles = strList "Denylist YAML files (`entries: [{term | pattern, scope}]`, the mekakushi shape); an entry with a scope other than `never` is skipped, an unreadable file adds nothing.";
+    publicRepos = strList "Public repos as `owner/name`, matched against the repo's `origin` remote.";
+    visibilityFiles = mkOption {
+      type = types.listOf (types.submodule { options = visibilityFile; });
+      default = [ ];
+      description = "Posture files that declare which repos are public.";
+    };
+  };
+
+  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "genLockTie" "privateTermsGate" "exec" ];
 
   hookAction =
     { config, ... }:
@@ -196,6 +223,7 @@ let
     };
     changeWindowFiles = strList "Files of change windows (`{changeWindows: [...]}`) written at run time, merged with changeWindows; a missing file opens nothing.";
     prefilter = prefilter;
+    privateTerms = privateTerms;
     hooks = mkOption {
       type = types.submodule {
         options = lib.listToAttrs (
@@ -248,6 +276,8 @@ in
     toolInputLimit
     changeWindow
     prefilter
+    privateTerms
+    visibilityFile
     actions
     config
     ;

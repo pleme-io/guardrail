@@ -253,6 +253,31 @@ remaining actions; exec exit 2 is passed through as a blocking exit, any other
 failure is reported and skipped. A malformed entry is skipped on its own and
 named by `guardrail validate`.
 
+### Private terms gate
+
+`privateTermsGate` (a `PreToolUse` action for `Bash|Write|Edit`, also
+`guardrail private-terms-gate`) keeps private names out of public repos. A
+`git commit` is judged on its staged diff (the work tree's for `-a`) and its
+`-m` text, a `git push` on every commit no remote ref holds yet, messages
+included, and a Write or Edit on the text it writes. Only added lines count, so
+a commit that removes a term passes. The repo is the one git resolves from the
+command's directory, and it is public when its `origin` slug is in
+`publicRepos` or a `visibilityFiles` posture file marks it public.
+
+```yaml
+privateTerms:
+  enable: true
+  terms: [tenant-a]
+  termFiles: [~/path/to/denylist.yaml]   # entries: [{term | pattern, scope}]
+  publicRepos: [acme/widget]
+  visibilityFiles:
+    - { path: ~/path/to/org.yaml, owner: acme }
+```
+
+The terms belong in private configuration only: a public file that lists them
+publishes them. Any read failure (no repo, no remote, an unreadable file)
+passes.
+
 ---
 
 ## Performance

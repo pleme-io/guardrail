@@ -1017,3 +1017,66 @@ fn an_mcp_tool_a_scoped_rule_names_is_read_only_by_that_rule() {
         .failure()
         .stdout(predicate::str::contains("rm-rf-root"));
 }
+
+fn git_in(dir: &std::path::Path, args: &[&str]) {
+    let ok = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok, "git {args:?}");
+}
+
+#[test]
+fn the_private_terms_gate_blocks_a_staged_term_in_a_public_repo_through_the_hook() {
+    let posture = TempDir::new().unwrap();
+    let org = posture.path().join("org.yaml");
+    fs::write(&org, "repos:\n- name: widget\n  visibility: public\n").unwrap();
+    let yaml = format!(
+        "privateTerms:\n  terms: [tenant-a]\n  visibilityFiles:\n  - path: {}\n    owner: acme\nhooks:\n  PreToolUse:\n  - action: privateTermsGate\n    matcher: Bash|Write|Edit\n",
+        org.display()
+    );
+    let (config, cache) = hook_config(&yaml);
+    guardrail_in(&config, &cache, &["validate"])
+        .assert()
+        .success();
+
+    let repo = TempDir::new().unwrap();
+    git_in(repo.path(), &["init", "-q"]);
+    git_in(
+        repo.path(),
+        &["remote", "add", "origin", "git@github.com:acme/widget.git"],
+    );
+    fs::write(repo.path().join("values.yaml"), "tenant-a: {}\n").unwrap();
+    git_in(repo.path(), &["add", "-A"]);
+    let payload = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "git commit -m values"},
+        "cwd": repo.path(),
+    })
+    .to_string();
+    guardrail_in(&config, &cache, &["hook", "PreToolUse"])
+        .write_stdin(payload.clone())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("private-terms-gate"))
+        .stdout(predicate::str::contains("values.yaml:1"));
+
+    git_in(
+        repo.path(),
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "git@github.com:acme/vault.git",
+        ],
+    );
+    guardrail_in(&config, &cache, &["hook", "PreToolUse"])
+        .write_stdin(payload)
+        .assert()
+        .success();
+}

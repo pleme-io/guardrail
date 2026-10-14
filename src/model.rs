@@ -404,6 +404,46 @@ pub struct GuardrailConfig {
     pub prefilter: PrefilterOverrides,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub hooks: crate::dispatch::HookTable,
+    #[serde(default)]
+    pub private_terms: PrivateTerms,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PrivateTerms {
+    #[serde(default = "enabled")]
+    pub enable: bool,
+    #[serde(default)]
+    pub terms: Vec<String>,
+    #[serde(default)]
+    pub term_files: Vec<String>,
+    #[serde(default)]
+    pub public_repos: Vec<String>,
+    #[serde(default)]
+    pub visibility_files: Vec<VisibilityFile>,
+}
+
+const fn enabled() -> bool {
+    true
+}
+
+impl Default for PrivateTerms {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            terms: Vec::new(),
+            term_files: Vec::new(),
+            public_repos: Vec::new(),
+            visibility_files: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct VisibilityFile {
+    pub path: String,
+    pub owner: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

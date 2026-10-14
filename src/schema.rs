@@ -11,8 +11,8 @@ use serde_json::{Value, json};
 
 use crate::dispatch::Builtin;
 use crate::model::{
-    ChangeWindow, ExampleCall, GuardrailConfig, PrefilterOverrides, Rule, RuleExamples,
-    ToolInputLimit,
+    ChangeWindow, ExampleCall, GuardrailConfig, PrefilterOverrides, PrivateTerms, Rule,
+    RuleExamples, ToolInputLimit, VisibilityFile,
 };
 
 #[derive(Default)]
@@ -75,6 +75,8 @@ pub fn schema() -> Value {
         "toolInputLimit": names_of::<ToolInputLimit>(),
         "changeWindow": names_of::<ChangeWindow>(),
         "prefilter": names_of::<PrefilterOverrides>(),
+        "privateTerms": names_of::<PrivateTerms>(),
+        "visibilityFile": names_of::<VisibilityFile>(),
         "actions": actions,
     })
 }
@@ -145,7 +147,7 @@ mod tests {
         let keys = names_of::<GuardrailConfig>();
         assert!(keys.contains(&"extraRules"));
         assert!(keys.contains(&"changeWindowFiles"));
-        assert_eq!(keys.len(), 8);
+        assert_eq!(keys.len(), 9);
     }
 
     #[test]
@@ -171,6 +173,7 @@ mod tests {
                 "searchAdvise",
                 "mintAdvise",
                 "genLockTie",
+                "privateTermsGate",
                 "exec"
             ])
         );
