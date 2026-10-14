@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "c2a5b77921b72ddc553ec51cf8b017985db21c725234f68b8842e41639a3bb32",
+  "cargo_lock_sha256": "c66578bb92a9060e70e2c50175caf61b551255a7bce249699455dbe033087a2c",
   "manifest_sha256": {
-    "Cargo.toml": "4d5f95088d78d4ee8f540f371e139029f33d013afecdce66bc27dac78cde288d"
+    "Cargo.toml": "e81b5f15d43dfd773758a57e0f2da8c5f8f38d5ba11bf75b9539e90e5da1ffaa"
   },
   "target_resolves": {
     "base": {
@@ -485,7 +485,7 @@
           "oid"
         ]
       },
-      "equivalent-1.0.2": {
+      "equivalent-1.0.3": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.21": {
+      "guardrail-0.1.22": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -679,7 +679,7 @@
           },
           {
             "name": "hayai",
-            "package_key": "hayai-0.1.3",
+            "package_key": "hayai-0.1.4",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -768,7 +768,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "hayai-0.1.3": {
+      "hayai-0.1.4": {
         "runtime_dependencies": [
           {
             "name": "aho_corasick",
@@ -872,7 +872,7 @@
         "runtime_dependencies": [
           {
             "name": "equivalent",
-            "package_key": "equivalent-1.0.2",
+            "package_key": "equivalent-1.0.3",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -2555,7 +2555,7 @@
     "digest-0.11.3": {
       "edition": "2024"
     },
-    "equivalent-1.0.2": {
+    "equivalent-1.0.3": {
       "edition": "2015"
     },
     "errno-0.3.14": {
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.21": {
+    "guardrail-0.1.22": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2587,7 +2587,7 @@
     "hashbrown-0.17.1": {
       "edition": "2024"
     },
-    "hayai-0.1.3": {
+    "hayai-0.1.4": {
       "edition": "2024"
     },
     "heck-0.5.0": {
