@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "9a3889a83cb8161f2cedecb94fdd5454559b70614c45b2c41b3bf7b79fa7d999",
+  "cargo_lock_sha256": "7f832e2c5fe01a411cef786b7fb753ee2c502d62a9704cfb1bc2f792851942bc",
   "manifest_sha256": {
-    "Cargo.toml": "e81b5f15d43dfd773758a57e0f2da8c5f8f38d5ba11bf75b9539e90e5da1ffaa"
+    "Cargo.toml": "fe1a8d15e278b2b133e445c7fab4fc7f1b8eb5dc4dcab5ef56a199b3bf48bca2"
   },
   "target_resolves": {
     "base": {
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.22": {
+      "guardrail-0.1.23": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.22": {
+    "guardrail-0.1.23": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
