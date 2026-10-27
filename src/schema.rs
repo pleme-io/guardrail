@@ -173,6 +173,7 @@ mod tests {
                 "searchAdvise",
                 "mintAdvise",
                 "genLockTie",
+                "generatedTree",
                 "privateTermsGate",
                 "exec"
             ])

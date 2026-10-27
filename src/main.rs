@@ -52,6 +52,8 @@ enum Command {
     MintAdvise,
     /// `PreToolUse` for Bash: block a `git commit` whose staged Cargo.gen.lock is stale against Cargo.lock or a manifest.
     GenLockTie,
+    /// `PreToolUse` for Edit and Write: block a hand edit of a file a Bluefile renders (a service, workload or generated output).
+    GeneratedTree,
     /// `PreToolUse` for Bash, Write and Edit: block a commit, push or write that carries a configured private term into a public repo.
     PrivateTermsGate,
     /// Run the actions configured under `hooks.<EVENT>` in guardrail.yaml; silent when there are none.
@@ -88,6 +90,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::GenLockTie => cmd_gen_lock_tie(),
+        Command::GeneratedTree => cmd_generated_tree(),
         Command::PrivateTermsGate => cmd_private_terms_gate(),
         Command::InputLimit => cmd_input_limit(),
         Command::Hook { event } => cmd_hook(&event),
@@ -309,6 +312,7 @@ impl Builtins for CliBuiltins {
                 _ => Outcome::Pass,
             },
             Builtin::GenLockTie => block(Ok(guardrail::genlock::block(input))),
+            Builtin::GeneratedTree => block(Ok(guardrail::generated::block(input))),
             Builtin::PrivateTermsGate => block(private_terms_block(input)),
         }
     }
@@ -317,6 +321,14 @@ impl Builtins for CliBuiltins {
 fn cmd_gen_lock_tie() -> Result<()> {
     let input = hook::parse_stdin().context("reading hook input")?;
     if let Some((rule, message)) = guardrail::genlock::block(&input) {
+        emit_block(&rule, &message);
+    }
+    Ok(())
+}
+
+fn cmd_generated_tree() -> Result<()> {
+    let input = hook::parse_stdin().context("reading hook input")?;
+    if let Some((rule, message)) = guardrail::generated::block(&input) {
         emit_block(&rule, &message);
     }
     Ok(())

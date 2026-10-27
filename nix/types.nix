@@ -156,7 +156,7 @@ let
     };
   };
 
-  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "genLockTie" "privateTermsGate" "exec" ];
+  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "genLockTie" "generatedTree" "privateTermsGate" "exec" ];
 
   hookAction =
     { config, ... }:

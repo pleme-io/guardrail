@@ -3,6 +3,7 @@ pub mod cache;
 pub mod config;
 pub mod dispatch;
 pub mod engine;
+pub mod generated;
 pub mod genlock;
 pub mod gitcall;
 pub mod hook;
