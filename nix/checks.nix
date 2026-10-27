@@ -35,11 +35,15 @@ let
     message = "fixture";
     category = "fixture";
     window = "fixture-window";
+    match = "command";
     test_block = "fixturecmd zap";
     test_allow = "fixturecmd list";
     examples = {
       block = [ "fixturecmd zap all" ];
-      allow = [ "fixturecmd zip" ];
+      allow = [
+        "fixturecmd zip"
+        "rg 'fixturecmd zap'"
+      ];
     };
   };
 
@@ -149,6 +153,10 @@ let
           matcher = "Bash";
         }
         {
+          action = "generatedTree";
+          matcher = "Edit";
+        }
+        {
           action = "inputLimit";
           matcher = "mcp__fixture__comment";
         }
@@ -233,7 +241,7 @@ let
     assert lib.assertMsg (cfg.checkTools == [ "Bash" "Write" "Read" ])
       "nix/checks.nix: checkTools is ${builtins.toJSON cfg.checkTools}";
     assert lib.assertMsg (cfg.hookRegistrations == {
-      PreToolUse = "Bash|mcp__fixture__comment";
+      PreToolUse = "Bash|Edit|mcp__fixture__comment";
       PostToolUse = null;
       Stop = null;
     }) "nix/checks.nix: hookRegistrations is ${builtins.toJSON cfg.hookRegistrations}";

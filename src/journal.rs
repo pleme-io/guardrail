@@ -198,7 +198,7 @@ pub fn extract_executed_paths(command: &str) -> Vec<String> {
     // Branch 2 — an interpreter in command position takes the next non-flag word.
     for segment in split_on_shell_operators(command) {
         let words: Vec<&str> = segment.split_whitespace().collect();
-        let Some(head) = command_head(&words) else {
+        let Some(head) = crate::shell::command_head(&words) else {
             continue;
         };
         let basename = Path::new(words[head])
@@ -224,36 +224,6 @@ fn split_on_shell_operators(command: &str) -> impl Iterator<Item = &str> {
         .split([';', '&', '|', '\n', '(', ')'])
         .map(str::trim)
         .filter(|s| !s.is_empty())
-}
-
-/// Index of the word actually being executed in a segment: skips leading
-/// `VAR=value` assignments and the transparent wrappers that take a command as
-/// their argument, so `env FOO=1 sudo bash x.sh` still resolves to `bash`.
-fn command_head(words: &[&str]) -> Option<usize> {
-    /// Wrappers whose own argument is the real command.
-    const WRAPPERS: &[&str] = &[
-        "env", "sudo", "doas", "nohup", "time", "exec", "command", "nice",
-    ];
-
-    let mut i = 0;
-    while i < words.len() {
-        let w = words[i];
-        // A leading assignment (`FOO=1`) is not the command.
-        let is_assignment = !w.starts_with('=')
-            && w.split_once('=').is_some_and(|(k, _)| {
-                !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
-            });
-        let basename = Path::new(w)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(w);
-        if is_assignment || WRAPPERS.contains(&basename) || w.starts_with('-') {
-            i += 1;
-            continue;
-        }
-        return Some(i);
-    }
-    None
 }
 
 /// Whether a word looks like a file path.

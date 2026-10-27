@@ -68,6 +68,11 @@ let
     };
     field = nullStr "The tool_input field the pattern reads; unset means the fields `guardrail check` scans for the tool.";
     cwd = nullStr "Regex the call's working directory must match for the rule to apply.";
+    match = mkOption {
+      type = types.enum [ "text" "command" ];
+      default = "text";
+      description = "text matches the pattern anywhere in the text; command anchors it at each command position (quotes, wrappers, ssh and sh -c strings lexed).";
+    };
   };
 
   ruleType = types.submodule { options = rule; };

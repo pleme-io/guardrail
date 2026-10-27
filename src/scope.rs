@@ -10,7 +10,7 @@
 use hayai::engine::{ChainedNormalizer, Normalizer, PathNormalizer};
 use regex::Regex;
 
-use crate::engine::{ProductionNormalizer, SqlCommentStripper};
+use crate::engine::{ProductionNormalizer, RuleMatcher, SqlCommentStripper};
 use crate::hook::{self, HookInput};
 use crate::model::{Decision, Example, Rule, Severity};
 
@@ -35,7 +35,7 @@ pub fn default_field(tool: &str) -> Option<&'static str> {
 
 struct Compiled {
     rule: Rule,
-    pattern: Regex,
+    pattern: RuleMatcher,
     cwd: Option<Regex>,
 }
 
@@ -60,7 +60,7 @@ impl ScopedRules {
         let mut compiled = Vec::new();
         let mut problems = Vec::new();
         for rule in rules.iter().filter(|r| r.is_scoped()) {
-            let pattern = match Regex::new(&rule.pattern) {
+            let pattern = match RuleMatcher::new(rule) {
                 Ok(p) => p,
                 Err(e) => {
                     problems.push(format!("{}: pattern: {e}", rule.name));

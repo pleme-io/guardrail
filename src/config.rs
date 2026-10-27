@@ -932,4 +932,28 @@ extraRules:
             "duplicate rule names across suites: {dupes:?}"
         );
     }
+
+    /// Every shipped rule's `test_block`, `test_allow` and `examples` hold under
+    /// the default prefilter, as `guardrail validate` runs them at rebuild.
+    #[test]
+    fn every_suite_rule_example_holds() {
+        let prefilter = crate::engine::PrefixPrefilter::default();
+        let mut failures = Vec::new();
+        for yaml_str in [
+            include_str!("../rules/defaults.yaml"),
+            include_str!("../rules/aws.yaml"),
+            include_str!("../rules/gcp.yaml"),
+            include_str!("../rules/azure.yaml"),
+            include_str!("../rules/process.yaml"),
+            include_str!("../rules/network.yaml"),
+            include_str!("../rules/nosql.yaml"),
+            include_str!("../rules/sql.yaml"),
+        ] {
+            let rules: Vec<Rule> = serde_yaml::from_str(yaml_str).unwrap();
+            for rule in &rules {
+                failures.extend(crate::scope::example_failures(rule, &prefilter));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
 }

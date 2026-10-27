@@ -1,3 +1,4 @@
+mod matcher;
 mod prefilter;
 mod sql;
 
@@ -10,10 +11,11 @@ pub use hayai::engine::{
     Prefilter, contains_ascii_ci,
 };
 
+pub use self::matcher::RuleMatcher;
 pub use self::prefilter::PrefixPrefilter;
 pub use self::sql::SqlCommentStripper;
 
-use crate::model::{Decision, Rule, Severity};
+use crate::model::{Decision, MatchMode, Rule, Severity};
 
 // ═══════════════════════════════════════════════════════════════════
 // Domain-specific trait: RuleEngine (returns Decision, not indices)
@@ -62,6 +64,34 @@ pub type NixStoreNormalizer = PathNormalizer;
 pub struct RegexEngine<N: Normalizer = ProductionNormalizer, P: Prefilter = PrefixPrefilter> {
     matcher: LazyRegexMatcher<N, P>,
     rules: Vec<Rule>,
+    /// Index into `rules` of each `RegexSet` pattern.
+    in_set: Vec<usize>,
+    /// Command-mode rules, matched outside the set at each command position.
+    commands: Vec<(usize, RuleMatcher)>,
+}
+
+/// The patterns the `RegexSet` compiles: every text-mode rule's, in order.
+#[must_use]
+pub fn set_patterns(rules: &[Rule]) -> Vec<&str> {
+    rules
+        .iter()
+        .filter(|r| r.mode == MatchMode::Text)
+        .map(|r| r.pattern.as_str())
+        .collect()
+}
+
+type Split = (Vec<usize>, Vec<(usize, RuleMatcher)>);
+
+fn split(rules: &[Rule]) -> anyhow::Result<Split> {
+    let mut in_set = Vec::new();
+    let mut commands = Vec::new();
+    for (i, rule) in rules.iter().enumerate() {
+        match rule.mode {
+            MatchMode::Text => in_set.push(i),
+            MatchMode::Command => commands.push((i, RuleMatcher::new(rule)?)),
+        }
+    }
+    Ok((in_set, commands))
 }
 
 impl<N: Normalizer + fmt::Debug, P: Prefilter + fmt::Debug> fmt::Debug for RegexEngine<N, P> {
@@ -116,9 +146,18 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
     ///
     /// Returns an error if any regex pattern is invalid.
     pub fn with_plugins(rules: Vec<Rule>, normalizer: N, prefilter: P) -> anyhow::Result<Self> {
-        let patterns: Vec<String> = rules.iter().map(|r| r.pattern.clone()).collect();
+        let patterns: Vec<String> = set_patterns(&rules)
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
         let matcher = LazyRegexMatcher::with_plugins(patterns, normalizer, prefilter)?;
-        Ok(Self { matcher, rules })
+        let (in_set, commands) = split(&rules)?;
+        Ok(Self {
+            matcher,
+            rules,
+            in_set,
+            commands,
+        })
     }
 
     pub fn with_index(
@@ -127,9 +166,15 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
         normalizer: N,
         prefilter: P,
     ) -> anyhow::Result<Self> {
-        let patterns: Vec<&str> = rules.iter().map(|r| r.pattern.as_str()).collect();
-        let matcher = LazyRegexMatcher::with_index(patterns, index, normalizer, prefilter)?;
-        Ok(Self { matcher, rules })
+        let matcher =
+            LazyRegexMatcher::with_index(set_patterns(&rules), index, normalizer, prefilter)?;
+        let (in_set, commands) = split(&rules)?;
+        Ok(Self {
+            matcher,
+            rules,
+            in_set,
+            commands,
+        })
     }
 
     #[must_use]
@@ -140,7 +185,22 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
 
 impl<N: Normalizer, P: Prefilter> RuleEngine for RegexEngine<N, P> {
     fn check(&self, command: &str) -> Decision {
-        let matches = self.matcher.check(command);
+        let mut matches: Vec<usize> = self
+            .matcher
+            .check(command)
+            .into_iter()
+            .map(|i| self.in_set[i])
+            .collect();
+        if !self.commands.is_empty() {
+            let lexed = crate::shell::commands(command);
+            matches.extend(
+                self.commands
+                    .iter()
+                    .filter(|(_, m)| m.matches_any(&lexed))
+                    .map(|(i, _)| *i),
+            );
+            matches.sort_unstable();
+        }
         if matches.is_empty() {
             return Decision::Allow;
         }

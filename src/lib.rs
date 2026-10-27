@@ -14,6 +14,7 @@ pub mod privateterms;
 pub mod production;
 pub mod schema;
 pub mod scope;
+pub mod shell;
 pub mod testing;
 pub mod windows;
 

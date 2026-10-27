@@ -12,6 +12,25 @@ pub enum Severity {
     Warn,
 }
 
+/// What a rule's pattern is matched against.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MatchMode {
+    /// The whole text: the pattern may match a word anywhere in it.
+    #[default]
+    Text,
+    /// Each command the text runs, from its command position (`shell::commands`);
+    /// the pattern is anchored there, so a word inside another program's argument is inert.
+    Command,
+}
+
+impl MatchMode {
+    #[must_use]
+    pub fn is_text(&self) -> bool {
+        *self == Self::Text
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Category(String);
@@ -74,6 +93,9 @@ pub struct Rule {
     /// A regex the hook payload's `cwd` must match for the rule to apply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
+    /// `command` matches the pattern at each command position; unset or `text` matches the whole text.
+    #[serde(default, rename = "match", skip_serializing_if = "MatchMode::is_text")]
+    pub mode: MatchMode,
 }
 
 impl Rule {
@@ -283,9 +305,15 @@ pub struct RuleBuilder {
     tools: Vec<String>,
     field: Option<String>,
     cwd: Option<String>,
+    mode: MatchMode,
 }
 
 impl RuleBuilder {
+    #[must_use]
+    pub fn mode(mut self, m: MatchMode) -> Self {
+        self.mode = m;
+        self
+    }
     #[must_use]
     pub fn tools<I: IntoIterator<Item = S>, S: Into<String>>(mut self, tools: I) -> Self {
         self.tools = tools.into_iter().map(Into::into).collect();
@@ -356,6 +384,7 @@ impl RuleBuilder {
             tools: self.tools,
             field: self.field,
             cwd: self.cwd,
+            mode: self.mode,
         }
     }
 }
@@ -377,6 +406,7 @@ impl Rule {
             tools: Vec::new(),
             field: None,
             cwd: None,
+            mode: MatchMode::Text,
         }
     }
 }

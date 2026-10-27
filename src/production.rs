@@ -81,7 +81,7 @@ pub fn engine_through(
 ) -> Result<RegexEngine> {
     let unscoped: Vec<Rule> = rules.into_iter().filter(|r| !r.is_scoped()).collect();
     let prefilter = crate::engine::PrefixPrefilter::from_user_config();
-    let patterns: Vec<&str> = unscoped.iter().map(|r| r.pattern.as_str()).collect();
+    let patterns = crate::engine::set_patterns(&unscoped);
     match LiteralIndex::through(store, &patterns) {
         Ok(index) => {
             RegexEngine::with_index(unscoped, index, ProductionNormalizer::default(), prefilter)

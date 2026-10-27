@@ -188,7 +188,7 @@ pub fn validate_all_rules_regex(rules: &[Rule]) -> Vec<String> {
 
     for rule in rules {
         // Compile pattern
-        let re = match Regex::new(&rule.pattern) {
+        let re = match crate::engine::RuleMatcher::new(rule) {
             Ok(r) => r,
             Err(e) => {
                 failures.push(format!("rule '{}': pattern compile error: {e}", rule.name));

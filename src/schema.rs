@@ -137,7 +137,8 @@ mod tests {
                 "examples",
                 "tools",
                 "field",
-                "cwd"
+                "cwd",
+                "match"
             ]
         );
     }
