@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "7f832e2c5fe01a411cef786b7fb753ee2c502d62a9704cfb1bc2f792851942bc",
+  "cargo_lock_sha256": "50b803bbc04eb3fa2b4bac9864c869dbf2c55c8ee6f978d8a872efc08055d312",
   "manifest_sha256": {
-    "Cargo.toml": "fe1a8d15e278b2b133e445c7fab4fc7f1b8eb5dc4dcab5ef56a199b3bf48bca2"
+    "Cargo.toml": "0a2cea230d08be46cda2cd28a88fe8259fc4802665f6442019d5a5c389c38118"
   },
   "target_resolves": {
     "base": {
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.23": {
+      "guardrail-0.1.24": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -1572,7 +1572,7 @@
           },
           {
             "name": "rustix",
-            "package_key": "rustix-1.1.5",
+            "package_key": "rustix-1.1.6",
             "kind": "normal",
             "features": [
               "fs"
@@ -1744,7 +1744,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "rustix-1.1.5": {
+          "rustix-1.1.6": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
@@ -1877,7 +1877,7 @@
               "no_std"
             ]
           },
-          "rustix-1.1.5": {
+          "rustix-1.1.6": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
@@ -2041,7 +2041,7 @@
               "no_std"
             ]
           },
-          "rustix-1.1.5": {
+          "rustix-1.1.6": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
@@ -2152,7 +2152,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "rustix-1.1.5": {
+          "rustix-1.1.6": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
@@ -2244,7 +2244,7 @@
               "no_std"
             ]
           },
-          "rustix-1.1.5": {
+          "rustix-1.1.6": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
@@ -2367,7 +2367,7 @@
               "no_std"
             ]
           },
-          "rustix-1.1.5": {
+          "rustix-1.1.6": {
             "runtime_dependencies": [
               {
                 "name": "bitflags",
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.23": {
+    "guardrail-0.1.24": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2657,7 +2657,7 @@
     "regex-syntax-0.8.11": {
       "edition": "2021"
     },
-    "rustix-1.1.5": {
+    "rustix-1.1.6": {
       "edition": "2021",
       "build_script": "build.rs"
     },
