@@ -331,7 +331,7 @@ mod tests {
 
         let mut all = Vec::new();
         for &(name, yaml) in suites {
-            let rules: Vec<Rule> = serde_yaml::from_str(yaml)
+            let rules: Vec<Rule> = serde_norway::from_str(yaml)
                 .unwrap_or_else(|e| panic!("suite '{name}' failed to parse: {e}"));
             all.extend(rules);
         }

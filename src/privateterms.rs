@@ -69,26 +69,29 @@ fn term(t: &str) -> Option<Matcher> {
 fn read_term_file(path: &Path) -> Vec<Matcher> {
     let Some(doc) = std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| serde_yaml::from_str::<serde_yaml::Value>(&s).ok())
+        .and_then(|s| serde_norway::from_str::<serde_norway::Value>(&s).ok())
     else {
         return Vec::new();
     };
-    let Some(entries) = doc.get("entries").and_then(serde_yaml::Value::as_sequence) else {
+    let Some(entries) = doc
+        .get("entries")
+        .and_then(serde_norway::Value::as_sequence)
+    else {
         return Vec::new();
     };
     entries
         .iter()
         .filter(|e| {
             e.get("scope")
-                .and_then(serde_yaml::Value::as_str)
+                .and_then(serde_norway::Value::as_str)
                 .is_none_or(|s| s == "never")
         })
         .filter_map(|e| {
-            if let Some(t) = e.get("term").and_then(serde_yaml::Value::as_str) {
+            if let Some(t) = e.get("term").and_then(serde_norway::Value::as_str) {
                 term(t)
             } else {
                 e.get("pattern")
-                    .and_then(serde_yaml::Value::as_str)
+                    .and_then(serde_norway::Value::as_str)
                     .and_then(|p| Regex::new(p).ok())
                     .map(Matcher::Pattern)
             }
@@ -120,26 +123,26 @@ fn listed_public(file: &crate::model::VisibilityFile, slug: &str) -> bool {
     }
     let Some(doc) = std::fs::read_to_string(gitcall::expand_home(&file.path))
         .ok()
-        .and_then(|s| serde_yaml::from_str::<serde_yaml::Value>(&s).ok())
+        .and_then(|s| serde_norway::from_str::<serde_norway::Value>(&s).ok())
     else {
         return false;
     };
     let default = doc
         .get("repo_defaults")
         .and_then(|d| d.get("visibility"))
-        .and_then(serde_yaml::Value::as_str);
+        .and_then(serde_norway::Value::as_str);
     doc.get("repos")
-        .and_then(serde_yaml::Value::as_sequence)
+        .and_then(serde_norway::Value::as_sequence)
         .into_iter()
         .flatten()
         .filter(|r| {
             r.get("name")
-                .and_then(serde_yaml::Value::as_str)
+                .and_then(serde_norway::Value::as_str)
                 .is_some_and(|n| n.eq_ignore_ascii_case(name))
         })
         .any(|r| {
             r.get("visibility")
-                .and_then(serde_yaml::Value::as_str)
+                .and_then(serde_norway::Value::as_str)
                 .or(default)
                 == Some("public")
         })

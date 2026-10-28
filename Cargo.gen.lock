@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "5c4c25ae544ee12d66fc8b2f59b505d202fdc972e3f0ca064580f70874f8bf68",
+  "cargo_lock_sha256": "feca80d58dd3f7addd9eebfa1eaf6280e33e640c35fc53f24c86afc1ca002ac3",
   "manifest_sha256": {
-    "Cargo.toml": "410a98c8e6d0114e3487c30042bcbd38a4cd4882a10dbe967b05971575b68e00"
+    "Cargo.toml": "9f7371296117b7b7038e947ebcff087dd3d9779777de384753694847530a01f3"
   },
   "target_resolves": {
     "base": {
@@ -740,8 +740,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1391,7 +1391,7 @@
           "std"
         ]
       },
-      "serde_yaml-0.9.34+deprecated": {
+      "serde_norway-0.9.42": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -1434,8 +1434,8 @@
             "tree": "target"
           },
           {
-            "name": "unsafe_libyaml",
-            "package_key": "unsafe-libyaml-0.2.11",
+            "name": "unsafe_libyaml_norway",
+            "package_key": "unsafe-libyaml-norway-0.2.15",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1661,7 +1661,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "unsafe-libyaml-0.2.11": {
+      "unsafe-libyaml-norway-0.2.15": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -2680,7 +2680,7 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "serde_yaml-0.9.34+deprecated": {
+    "serde_norway-0.9.42": {
       "edition": "2021"
     },
     "sha2-0.11.1": {
@@ -2712,7 +2712,7 @@
     "unicode-ident-1.0.27": {
       "edition": "2021"
     },
-    "unsafe-libyaml-0.2.11": {
+    "unsafe-libyaml-norway-0.2.15": {
       "edition": "2021",
       "binaries": [
         {

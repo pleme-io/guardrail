@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn parses_from_the_config_shape() {
         let yaml = "toolInputLimits:\n  - name: jira-comment-length\n    tools: [mcp__atlassian__jira_add_comment]\n    field: body\n    maxChars: 140\n    message: keep it short\n";
-        let cfg: crate::model::GuardrailConfig = serde_yaml::from_str(yaml).unwrap();
+        let cfg: crate::model::GuardrailConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(cfg.tool_input_limits.len(), 1);
         assert_eq!(cfg.tool_input_limits[0].max_chars, 140);
     }

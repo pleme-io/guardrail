@@ -7,7 +7,7 @@ use crate::model::{ChangeWindow, GuardrailConfig};
 #[serde(rename_all = "camelCase")]
 struct WindowFileEntries {
     #[serde(default)]
-    change_windows: Vec<serde_yaml::Value>,
+    change_windows: Vec<serde_norway::Value>,
 }
 
 #[must_use]
@@ -88,10 +88,10 @@ pub fn from_files(paths: &[String], base: &Path) -> (Vec<ChangeWindow>, Vec<Stri
         if text.trim().is_empty() {
             continue;
         }
-        match serde_yaml::from_str::<WindowFileEntries>(&text) {
+        match serde_norway::from_str::<WindowFileEntries>(&text) {
             Ok(f) => {
                 for (i, entry) in f.change_windows.into_iter().enumerate() {
-                    match serde_yaml::from_value::<ChangeWindow>(entry) {
+                    match serde_norway::from_value::<ChangeWindow>(entry) {
                         Ok(w) => windows.push(w),
                         Err(e) => problems.push(format!("{} entry {i}: {e}", path.display())),
                     }

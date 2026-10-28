@@ -46,7 +46,7 @@ mod tests {
 
     fn shutdown() -> Rule {
         let rules: Vec<Rule> =
-            serde_yaml::from_str(include_str!("../../rules/process.yaml")).unwrap();
+            serde_norway::from_str(include_str!("../../rules/process.yaml")).unwrap();
         rules.into_iter().find(|r| r.name == "shutdown").unwrap()
     }
 

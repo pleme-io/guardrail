@@ -130,7 +130,7 @@ impl Action {
 #[serde(untagged)]
 pub enum ActionEntry {
     Valid(Action),
-    Invalid(serde_yaml::Value),
+    Invalid(serde_norway::Value),
 }
 
 pub type HookTable = BTreeMap<String, Vec<ActionEntry>>;
@@ -439,7 +439,7 @@ mod tests {
     }
 
     fn table(yaml: &str) -> HookTable {
-        serde_yaml::from_str(yaml).unwrap()
+        serde_norway::from_str(yaml).unwrap()
     }
 
     const BASH: &str =

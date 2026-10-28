@@ -51,7 +51,7 @@ impl RuleProvider for DefaultsProvider {
     }
 
     fn rules(&self) -> anyhow::Result<Vec<Rule>> {
-        Ok(serde_yaml::from_str(DEFAULTS_YAML)?)
+        Ok(serde_norway::from_str(DEFAULTS_YAML)?)
     }
 }
 
@@ -123,14 +123,14 @@ impl DirectoryProvider {
 ///
 /// Returns an error if the text is not a YAML list.
 pub fn parse_rule_list(text: &str) -> anyhow::Result<(Vec<Rule>, Vec<String>)> {
-    let entries: Vec<serde_yaml::Value> = match serde_yaml::from_str(text)? {
-        serde_yaml::Value::Null => Vec::new(),
-        v => serde_yaml::from_value(v)?,
+    let entries: Vec<serde_norway::Value> = match serde_norway::from_str(text)? {
+        serde_norway::Value::Null => Vec::new(),
+        v => serde_norway::from_value(v)?,
     };
     let problems = crate::model::rule_entry_problems(&entries);
     let rules = entries
         .into_iter()
-        .filter_map(|v| serde_yaml::from_value(v).ok())
+        .filter_map(|v| serde_norway::from_value(v).ok())
         .collect();
     Ok((rules, problems))
 }
@@ -257,21 +257,21 @@ pub fn load_user_config_checked(path: &Path) -> anyhow::Result<(GuardrailConfig,
 ///
 /// Returns an error if the text is not a YAML mapping.
 pub fn parse_user_config(text: &str) -> anyhow::Result<(GuardrailConfig, Vec<String>)> {
-    let map = match serde_yaml::from_str::<serde_yaml::Value>(text)? {
-        serde_yaml::Value::Null => serde_yaml::Mapping::new(),
-        serde_yaml::Value::Mapping(m) => m,
+    let map = match serde_norway::from_str::<serde_norway::Value>(text)? {
+        serde_norway::Value::Null => serde_norway::Mapping::new(),
+        serde_norway::Value::Mapping(m) => m,
         _ => anyhow::bail!("guardrail.yaml is not a mapping"),
     };
-    let mut kept = serde_yaml::Mapping::new();
+    let mut kept = serde_norway::Mapping::new();
     let mut problems = Vec::new();
     for (k, v) in map {
-        let mut one = serde_yaml::Mapping::new();
+        let mut one = serde_norway::Mapping::new();
         one.insert(k.clone(), v.clone());
         let key = k.as_str().unwrap_or("<non-string key>").to_owned();
-        match serde_yaml::from_value::<GuardrailConfig>(serde_yaml::Value::Mapping(one)) {
+        match serde_norway::from_value::<GuardrailConfig>(serde_norway::Value::Mapping(one)) {
             Ok(_) => {
                 if key == "extraRules"
-                    && let serde_yaml::Value::Sequence(entries) = &v
+                    && let serde_norway::Value::Sequence(entries) = &v
                 {
                     problems.extend(
                         crate::model::rule_entry_problems(entries)
@@ -284,7 +284,7 @@ pub fn parse_user_config(text: &str) -> anyhow::Result<(GuardrailConfig, Vec<Str
             Err(e) => problems.push(format!("key {key}: {e}")),
         }
     }
-    let config = serde_yaml::from_value(serde_yaml::Value::Mapping(kept))?;
+    let config = serde_norway::from_value(serde_norway::Value::Mapping(kept))?;
     Ok((config, problems))
 }
 
@@ -358,7 +358,7 @@ mod tests {
     #[test]
     fn directory_provider_loads_yaml() {
         let dir = TempDir::new().unwrap();
-        let yaml = serde_yaml::to_string(&vec![test_rule(
+        let yaml = serde_norway::to_string(&vec![test_rule(
             "custom-fs",
             crate::model::cat("filesystem"),
         )])
@@ -378,12 +378,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("a.yaml"),
-            serde_yaml::to_string(&vec![test_rule("rule-a", crate::model::cat("git"))]).unwrap(),
+            serde_norway::to_string(&vec![test_rule("rule-a", crate::model::cat("git"))]).unwrap(),
         )
         .unwrap();
         fs::write(
             dir.path().join("b.yaml"),
-            serde_yaml::to_string(&vec![test_rule("rule-b", crate::model::cat("docker"))]).unwrap(),
+            serde_norway::to_string(&vec![test_rule("rule-b", crate::model::cat("docker"))])
+                .unwrap(),
         )
         .unwrap();
 
@@ -399,12 +400,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("z.yaml"),
-            serde_yaml::to_string(&vec![test_rule("z-rule", crate::model::cat("git"))]).unwrap(),
+            serde_norway::to_string(&vec![test_rule("z-rule", crate::model::cat("git"))]).unwrap(),
         )
         .unwrap();
         fs::write(
             dir.path().join("a.yaml"),
-            serde_yaml::to_string(&vec![test_rule("a-rule", crate::model::cat("git"))]).unwrap(),
+            serde_norway::to_string(&vec![test_rule("a-rule", crate::model::cat("git"))]).unwrap(),
         )
         .unwrap();
 
@@ -558,7 +559,7 @@ mod tests {
     #[test]
     fn aws_suite_parses() {
         let yaml = include_str!("../rules/aws.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(
             rules.len() >= 20,
             "expected 20+ aws rules, got {}",
@@ -574,21 +575,21 @@ mod tests {
     #[test]
     fn gcp_suite_parses() {
         let yaml = include_str!("../rules/gcp.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(rules.len() >= 10);
     }
 
     #[test]
     fn azure_suite_parses() {
         let yaml = include_str!("../rules/azure.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(rules.len() >= 15);
     }
 
     #[test]
     fn process_suite_parses() {
         let yaml = include_str!("../rules/process.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(rules.len() >= 5);
         assert!(
             rules
@@ -600,7 +601,7 @@ mod tests {
     #[test]
     fn network_suite_parses() {
         let yaml = include_str!("../rules/network.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(rules.len() >= 5);
         assert!(
             rules
@@ -612,7 +613,7 @@ mod tests {
     #[test]
     fn nosql_suite_parses() {
         let yaml = include_str!("../rules/nosql.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(rules.len() >= 5);
         assert!(
             rules
@@ -624,7 +625,7 @@ mod tests {
     #[test]
     fn sql_suite_parses() {
         let yaml = include_str!("../rules/sql.yaml");
-        let rules: Vec<Rule> = serde_yaml::from_str(yaml).unwrap();
+        let rules: Vec<Rule> = serde_norway::from_str(yaml).unwrap();
         assert!(
             rules.len() >= 35,
             "expected 35+ sql rules, got {}",
@@ -689,7 +690,7 @@ extraRules:
         let path = dir.path().join("empty.yaml");
         fs::write(&path, "").unwrap();
         // Empty YAML should deserialize as null -> error or default
-        // serde_yaml::from_str("") returns an error for GuardrailConfig
+        // serde_norway::from_str("") returns an error for GuardrailConfig
         let result = load_user_config(&path);
         // Empty string in YAML is tricky — it may err or return default depending on version
         // Just ensure it doesn't panic
@@ -774,8 +775,8 @@ extraRules:
     #[test]
     fn directory_provider_ignores_non_yaml_files() {
         let dir = TempDir::new().unwrap();
-        let yaml =
-            serde_yaml::to_string(&vec![test_rule("yaml-rule", crate::model::cat("git"))]).unwrap();
+        let yaml = serde_norway::to_string(&vec![test_rule("yaml-rule", crate::model::cat("git"))])
+            .unwrap();
         fs::write(dir.path().join("rules.yaml"), &yaml).unwrap();
         fs::write(dir.path().join("readme.md"), "# not a rule file").unwrap();
         fs::write(dir.path().join("rules.json"), "{}").unwrap();
@@ -792,8 +793,8 @@ extraRules:
     #[test]
     fn directory_provider_loads_yml_extension() {
         let dir = TempDir::new().unwrap();
-        let yaml =
-            serde_yaml::to_string(&vec![test_rule("yml-rule", crate::model::cat("nix"))]).unwrap();
+        let yaml = serde_norway::to_string(&vec![test_rule("yml-rule", crate::model::cat("nix"))])
+            .unwrap();
         fs::write(dir.path().join("rules.yml"), &yaml).unwrap();
 
         let provider = DirectoryProvider {
@@ -920,7 +921,7 @@ extraRules:
             include_str!("../rules/nosql.yaml"),
             include_str!("../rules/sql.yaml"),
         ] {
-            let rules: Vec<Rule> = serde_yaml::from_str(yaml_str).unwrap();
+            let rules: Vec<Rule> = serde_norway::from_str(yaml_str).unwrap();
             for rule in rules {
                 if !all_names.insert(rule.name.clone()) {
                     dupes.push(rule.name);
@@ -949,7 +950,7 @@ extraRules:
             include_str!("../rules/nosql.yaml"),
             include_str!("../rules/sql.yaml"),
         ] {
-            let rules: Vec<Rule> = serde_yaml::from_str(yaml_str).unwrap();
+            let rules: Vec<Rule> = serde_norway::from_str(yaml_str).unwrap();
             for rule in &rules {
                 failures.extend(crate::scope::example_failures(rule, &prefilter));
             }

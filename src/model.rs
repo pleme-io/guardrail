@@ -531,24 +531,24 @@ pub struct ToolInputLimit {
 }
 
 fn valid_rules<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Rule>, D::Error> {
-    let entries = Vec::<serde_yaml::Value>::deserialize(d)?;
+    let entries = Vec::<serde_norway::Value>::deserialize(d)?;
     Ok(entries
         .into_iter()
-        .filter_map(|v| serde_yaml::from_value(v).ok())
+        .filter_map(|v| serde_norway::from_value(v).ok())
         .collect())
 }
 
 /// Each entry of a rule list that is not a rule, named with why.
 #[must_use]
-pub fn rule_entry_problems(entries: &[serde_yaml::Value]) -> Vec<String> {
+pub fn rule_entry_problems(entries: &[serde_norway::Value]) -> Vec<String> {
     entries
         .iter()
         .enumerate()
         .filter_map(|(i, v)| {
-            serde_yaml::from_value::<Rule>(v.clone()).err().map(|e| {
+            serde_norway::from_value::<Rule>(v.clone()).err().map(|e| {
                 let name = v
                     .get("name")
-                    .and_then(serde_yaml::Value::as_str)
+                    .and_then(serde_norway::Value::as_str)
                     .unwrap_or("<unnamed>");
                 format!("entry {i} ({name}): {e}")
             })
@@ -602,8 +602,8 @@ mod tests {
 
     #[test]
     fn severity_yaml_round_trip() {
-        let yaml = serde_yaml::to_string(&Severity::Block).unwrap();
-        let back: Severity = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&Severity::Block).unwrap();
+        let back: Severity = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back, Severity::Block);
     }
 
@@ -843,8 +843,8 @@ mod tests {
             .category(cat("git"))
             .build();
 
-        let yaml = serde_yaml::to_string(&rule).unwrap();
-        let back: Rule = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&rule).unwrap();
+        let back: Rule = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.name, "yaml-rule");
         assert_eq!(back.severity, Severity::Warn);
         assert!(back.test_block.is_none());
@@ -954,8 +954,8 @@ mod tests {
             .extra_rules
             .push(Rule::builder("custom", "pat").build());
 
-        let yaml = serde_yaml::to_string(&config).unwrap();
-        let back: GuardrailConfig = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&config).unwrap();
+        let back: GuardrailConfig = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.categories.get("git"), Some(&false));
         assert_eq!(back.disabled_rules, vec!["rm-rf-root"]);
         assert_eq!(back.extra_rules.len(), 1);
@@ -963,7 +963,7 @@ mod tests {
 
     #[test]
     fn config_deserialize_empty_yaml() {
-        let config: GuardrailConfig = serde_yaml::from_str("{}").unwrap();
+        let config: GuardrailConfig = serde_norway::from_str("{}").unwrap();
         assert!(config.categories.is_empty());
         assert!(config.extra_rules.is_empty());
         assert!(config.disabled_rules.is_empty());
@@ -999,7 +999,7 @@ disabledRules:
   - some-rule
 extraRules: []
 ";
-        let config: GuardrailConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: GuardrailConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.disabled_rules, vec!["some-rule"]);
     }
 
@@ -1009,8 +1009,8 @@ extraRules: []
             Rule::builder("r1", "p1").severity(Severity::Block).build(),
             Rule::builder("r2", "p2").severity(Severity::Warn).build(),
         ];
-        let yaml = serde_yaml::to_string(&rules).unwrap();
-        let back: Vec<Rule> = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&rules).unwrap();
+        let back: Vec<Rule> = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.len(), 2);
         assert_eq!(back[0].name, "r1");
         assert_eq!(back[1].name, "r2");
@@ -1027,7 +1027,7 @@ extraRules: []
   message: "nope"
   category: git
 "#;
-        let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
+        let result: Result<Vec<Rule>, _> = serde_norway::from_str(yaml);
         assert!(
             result.is_err(),
             "invalid severity should fail deserialization"
@@ -1043,7 +1043,7 @@ extraRules: []
   message: "nope"
   category: Not Lowercase
 "#;
-        let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
+        let result: Result<Vec<Rule>, _> = serde_norway::from_str(yaml);
         assert!(
             result.is_err(),
             "a category that is not a lowercase name should fail deserialization"
@@ -1056,7 +1056,7 @@ extraRules: []
 - name: incomplete
   severity: block
 ";
-        let result: Result<Vec<Rule>, _> = serde_yaml::from_str(yaml);
+        let result: Result<Vec<Rule>, _> = serde_norway::from_str(yaml);
         assert!(result.is_err(), "missing required fields should fail");
     }
 
@@ -1066,7 +1066,7 @@ extraRules: []
 categories:
   my-suite: false
 ";
-        let config: GuardrailConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: GuardrailConfig = serde_norway::from_str(yaml).unwrap();
         assert!(!config.is_category_enabled(&cat("my-suite")));
         assert!(config.is_category_enabled(&cat("git")));
     }
@@ -1105,7 +1105,7 @@ disabledRules: [rm-rf-root]
     #[test]
     fn an_unknown_key_is_refused_alone() {
         let yaml = "disabledRule: [x]\ndisabledRules: [y]\nprefilter: {extraCommand: [z]}\n";
-        assert!(serde_yaml::from_str::<GuardrailConfig>(yaml).is_err());
+        assert!(serde_norway::from_str::<GuardrailConfig>(yaml).is_err());
         let (config, problems) = crate::config::parse_user_config(yaml).unwrap();
         assert_eq!(config.disabled_rules, ["y"]);
         assert_eq!(problems.len(), 2, "{problems:?}");
@@ -1116,30 +1116,32 @@ disabledRules: [rm-rf-root]
     #[test]
     fn every_config_struct_refuses_an_unknown_key() {
         assert!(
-            serde_yaml::from_str::<Rule>(
+            serde_norway::from_str::<Rule>(
                 "{name: a, pattern: b, severity: block, message: c, category: d, extra: 1}"
             )
             .is_err()
         );
-        assert!(serde_yaml::from_str::<RuleExamples>("{block: [], deny: []}").is_err());
-        assert!(serde_yaml::from_str::<ExampleCall>("{input: a, tools: b}").is_err());
+        assert!(serde_norway::from_str::<RuleExamples>("{block: [], deny: []}").is_err());
+        assert!(serde_norway::from_str::<ExampleCall>("{input: a, tools: b}").is_err());
         assert!(
-            serde_yaml::from_str::<ToolInputLimit>(
+            serde_norway::from_str::<ToolInputLimit>(
                 "{name: a, tools: [b], field: c, maxChars: 1, message: d, max: 2}"
             )
             .is_err()
         );
         assert!(
-            serde_yaml::from_str::<ChangeWindow>("{name: a, tag: b, start: c, end: d, ticket: e}")
-                .is_err()
+            serde_norway::from_str::<ChangeWindow>(
+                "{name: a, tag: b, start: c, end: d, ticket: e}"
+            )
+            .is_err()
         );
-        assert!(serde_yaml::from_str::<PrefilterOverrides>("{extraCommand: []}").is_err());
-        assert!(serde_yaml::from_str::<PrefilterSpec>("{command: []}").is_err());
+        assert!(serde_norway::from_str::<PrefilterOverrides>("{extraCommand: []}").is_err());
+        assert!(serde_norway::from_str::<PrefilterSpec>("{command: []}").is_err());
     }
 
     #[test]
     fn a_window_file_envelope_stays_open_to_its_writer() {
-        let f: ChangeWindowFile = serde_yaml::from_str(
+        let f: ChangeWindowFile = serde_norway::from_str(
             "{changeWindows: [], generatedAt: '2026-10-06T00:00:00Z', source: jira}",
         )
         .unwrap();
@@ -1148,14 +1150,14 @@ disabledRules: [rm-rf-root]
 
     #[test]
     fn examples_are_text_or_a_call() {
-        let rule: Rule = serde_yaml::from_str(
+        let rule: Rule = serde_norway::from_str(
             "{name: a, pattern: b, severity: block, message: c, category: d, tools: [Write], field: file_path, cwd: '/x/', examples: {block: [b, {input: b, tool: Edit, cwd: /x/}]}}",
         )
         .unwrap();
         assert_eq!(rule.examples.block[0], Example::Text("b".into()));
         assert_eq!(rule.examples.block[1].tool(), Some("Edit"));
         assert!(rule.is_scoped());
-        let back: Rule = serde_yaml::from_str(&serde_yaml::to_string(&rule).unwrap()).unwrap();
+        let back: Rule = serde_norway::from_str(&serde_norway::to_string(&rule).unwrap()).unwrap();
         assert_eq!(back, rule);
     }
 }

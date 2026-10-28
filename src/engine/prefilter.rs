@@ -34,7 +34,7 @@ impl PrefixPrefilter {
     /// Only if the compiled-in `rules/prefilter.yaml` does not parse, which a unit test rules out.
     #[must_use]
     pub fn default_spec() -> PrefilterSpec {
-        serde_yaml::from_str(DEFAULT_SPEC_YAML).expect("rules/prefilter.yaml is valid")
+        serde_norway::from_str(DEFAULT_SPEC_YAML).expect("rules/prefilter.yaml is valid")
     }
 
     #[must_use]
