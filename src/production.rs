@@ -44,15 +44,17 @@ pub fn resolve_all_rules() -> Result<Vec<Rule>, HayaiError> {
     };
     let user_config = config::load_user_config(&config::config_path())
         .context("loading guardrail config")
-        .map_err(|e| HayaiError::Io {
-            source: std::io::Error::other(e.to_string()),
-        })?;
+        .map_err(io_error)?;
     let providers: Vec<&dyn RuleProvider> = vec![&defaults, &rules_d];
     config::resolve(&providers, &user_config)
         .context("resolving rules")
-        .map_err(|e| HayaiError::Io {
-            source: std::io::Error::other(e.to_string()),
-        })
+        .map_err(io_error)
+}
+
+fn io_error(e: anyhow::Error) -> HayaiError {
+    HayaiError::Io {
+        source: std::io::Error::other(format!("{e:#}")),
+    }
 }
 
 /// The resolved rules through the fingerprinted cache.
@@ -146,6 +148,20 @@ pub fn production_guard() -> Result<Guard> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_resolve_failure_names_its_cause_not_only_its_context() {
+        let e = anyhow::anyhow!("unknown variant `ai-agents`")
+            .context("parsing rules.d/x.yaml")
+            .context("resolving rules");
+        let shown = super::io_error(e).to_string();
+        assert!(
+            shown.contains("resolving rules")
+                && shown.contains("rules.d/x.yaml")
+                && shown.contains("ai-agents"),
+            "{shown}"
+        );
+    }
+
     use super::*;
     use crate::RuleEngine;
     use crate::model::Decision;
