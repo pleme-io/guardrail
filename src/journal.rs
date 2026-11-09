@@ -240,7 +240,7 @@ fn has_script_extension(word: &str) -> bool {
 ///
 /// Every arm yields an ABSOLUTE path or defers to the next one. The first two
 /// used to take their variable verbatim and only the literal third arm was
-/// safe — the shape catalogued in `theory/MASKED-BRANCH.md`, where a guarded
+/// safe — the masked-branch shape, where a guarded
 /// arm makes the chain read as safe while the arm an operator actually sets is
 /// raw. `XDG_RUNTIME_DIR=""` put the journal at the relative
 /// `guardrail/write-journal.json`, i.e. inside whatever directory the guarded
