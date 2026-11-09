@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "528fa97d509d77121f57228db6c674ef05a71821d3b5b3db644f638b768e9bb3",
+  "cargo_lock_sha256": "a3f34d13d73514477ad578d43ab4da18b473409e338c9daaa4061c56509a2200",
   "manifest_sha256": {
-    "Cargo.toml": "a47aa35ae9cc788bd3eb5ef24f5d7716ca158661b55b39d1ff3ddbad8618cacc"
+    "Cargo.toml": "eee46d218df7b42f0bb6b8bf093bdf4a95ea70a8a9c1c6ffe4b352a830afe099"
   },
   "target_resolves": {
     "base": {
@@ -392,7 +392,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.9",
+            "package_key": "syn-3.0.10",
             "kind": "normal",
             "features": [
               "full"
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.27": {
+      "guardrail-0.1.28": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -904,7 +904,7 @@
           "default"
         ]
       },
-      "itoa-1.0.18": {
+      "itoa-1.0.19": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -1322,7 +1322,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.9",
+            "package_key": "syn-3.0.10",
             "kind": "normal",
             "features": [
               "clone-impls",
@@ -1346,7 +1346,7 @@
         "runtime_dependencies": [
           {
             "name": "itoa",
-            "package_key": "itoa-1.0.18",
+            "package_key": "itoa-1.0.19",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1405,7 +1405,7 @@
           },
           {
             "name": "itoa",
-            "package_key": "itoa-1.0.18",
+            "package_key": "itoa-1.0.19",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -1492,7 +1492,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "syn-3.0.9": {
+      "syn-3.0.10": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -1637,7 +1637,7 @@
           },
           {
             "name": "syn",
-            "package_key": "syn-3.0.9",
+            "package_key": "syn-3.0.10",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.27": {
+    "guardrail-0.1.28": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
@@ -2605,7 +2605,7 @@
     "is_terminal_polyfill-1.70.2": {
       "edition": "2021"
     },
-    "itoa-1.0.18": {
+    "itoa-1.0.19": {
       "edition": "2021"
     },
     "libc-0.2.191": {
@@ -2689,7 +2689,7 @@
     "strsim-0.11.1": {
       "edition": "2015"
     },
-    "syn-3.0.9": {
+    "syn-3.0.10": {
       "edition": "2021"
     },
     "tempfile-3.27.0": {
