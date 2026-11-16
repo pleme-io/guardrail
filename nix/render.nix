@@ -1,4 +1,8 @@
-{ lib, pkgs, package }:
+{
+  lib,
+  pkgs,
+  package,
+}:
 cfg:
 let
   prune = lib.filterAttrs (_: v: v != null && v != [ ] && v != { });
@@ -52,13 +56,12 @@ let
       changeWindows
       changeWindowFiles
       prefilter
+      lexicon
       privateTerms
       ;
     extraRules = map renderRule cfg.extraRules;
   }
-  // lib.optionalAttrs (hooks != { }) {
-    hooks = lib.mapAttrs (_: map renderAction) hooks;
-  };
+  // lib.optionalAttrs (hooks != { }) { hooks = lib.mapAttrs (_: map renderAction) hooks; };
 
   checkTools = lib.unique ([ "Bash" ] ++ lib.concatMap (r: r.tools) typedRules);
 

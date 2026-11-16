@@ -90,6 +90,7 @@ pub fn engine_through(
         }
         Err(_) => RegexEngine::with_prefilter(unscoped, prefilter),
     }
+    .map(|e| e.with_lexicon(crate::lexicon::Lexicon::from_user_config()))
     .context("compiling RegexSet")
 }
 

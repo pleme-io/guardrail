@@ -432,6 +432,9 @@ pub struct GuardrailConfig {
     pub change_window_files: Vec<String>,
     #[serde(default)]
     pub prefilter: PrefilterOverrides,
+    /// Shells, wrappers and remote shells added to `rules/lexicon.yaml`.
+    #[serde(default)]
+    pub lexicon: crate::lexicon::LexiconOverrides,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub hooks: crate::dispatch::HookTable,
     #[serde(default)]

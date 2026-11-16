@@ -68,6 +68,8 @@ pub struct RegexEngine<N: Normalizer = ProductionNormalizer, P: Prefilter = Pref
     in_set: Vec<usize>,
     /// Command-mode rules, matched outside the set at each command position.
     commands: Vec<(usize, RuleMatcher)>,
+    /// How command-mode rules find each command position.
+    lexicon: crate::lexicon::Lexicon,
 }
 
 /// The patterns the `RegexSet` compiles: every text-mode rule's, in order.
@@ -157,7 +159,15 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
             rules,
             in_set,
             commands,
+            lexicon: crate::lexicon::Lexicon::shipped().clone(),
         })
+    }
+
+    /// The same engine reading command positions with `lexicon`.
+    #[must_use]
+    pub fn with_lexicon(mut self, lexicon: crate::lexicon::Lexicon) -> Self {
+        self.lexicon = lexicon;
+        self
     }
 
     pub fn with_index(
@@ -174,6 +184,7 @@ impl<N: Normalizer, P: Prefilter> RegexEngine<N, P> {
             rules,
             in_set,
             commands,
+            lexicon: crate::lexicon::Lexicon::shipped().clone(),
         })
     }
 
@@ -192,7 +203,7 @@ impl<N: Normalizer, P: Prefilter> RuleEngine for RegexEngine<N, P> {
             .map(|i| self.in_set[i])
             .collect();
         if !self.commands.is_empty() {
-            let lexed = crate::shell::commands(command);
+            let lexed = crate::shell::commands_with(command, &self.lexicon);
             matches.extend(
                 self.commands
                     .iter()

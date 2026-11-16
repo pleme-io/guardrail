@@ -210,7 +210,7 @@ pub fn example_failures(rule: &Rule, prefilter: &crate::engine::PrefixPrefilter)
     }
     let single =
         match crate::engine::RegexEngine::with_prefilter(vec![rule.clone()], prefilter.clone()) {
-            Ok(e) => e,
+            Ok(e) => e.with_lexicon(crate::lexicon::Lexicon::from_user_config()),
             Err(e) => return vec![format!("{}: pattern: {e}", rule.name)],
         };
     let mut failures = Vec::new();

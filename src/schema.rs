@@ -75,6 +75,9 @@ pub fn schema() -> Value {
         "toolInputLimit": names_of::<ToolInputLimit>(),
         "changeWindow": names_of::<ChangeWindow>(),
         "prefilter": names_of::<PrefilterOverrides>(),
+        "lexicon": names_of::<crate::lexicon::LexiconOverrides>(),
+        "wrapper": names_of::<crate::lexicon::Wrapper>(),
+        "remoteShell": names_of::<crate::lexicon::RemoteShell>(),
         "privateTerms": names_of::<PrivateTerms>(),
         "visibilityFile": names_of::<VisibilityFile>(),
         "actions": actions,
@@ -148,7 +151,8 @@ mod tests {
         let keys = names_of::<GuardrailConfig>();
         assert!(keys.contains(&"extraRules"));
         assert!(keys.contains(&"changeWindowFiles"));
-        assert_eq!(keys.len(), 9);
+        assert!(keys.contains(&"lexicon"));
+        assert_eq!(keys.len(), 10);
     }
 
     #[test]

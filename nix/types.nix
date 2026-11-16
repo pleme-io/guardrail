@@ -2,11 +2,13 @@
 let
   inherit (lib) mkOption types;
 
-  nullStr = description: mkOption {
-    type = types.nullOr types.str;
-    default = null;
-    inherit description;
-  };
+  nullStr =
+    description:
+    mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      inherit description;
+    };
 
   exampleCall = {
     input = mkOption {
@@ -42,7 +44,10 @@ let
       description = "Regex matched against the command, or against `field` when set.";
     };
     severity = mkOption {
-      type = types.enum [ "block" "warn" ];
+      type = types.enum [
+        "block"
+        "warn"
+      ];
       description = "block refuses the call; warn lets it run and says why.";
     };
     message = mkOption {
@@ -69,7 +74,10 @@ let
     field = nullStr "The tool_input field the pattern reads; unset means the fields `guardrail check` scans for the tool.";
     cwd = nullStr "Regex the call's working directory must match for the rule to apply.";
     match = mkOption {
-      type = types.enum [ "text" "command" ];
+      type = types.enum [
+        "text"
+        "command"
+      ];
       default = "text";
       description = "text matches the pattern anywhere in the text; command anchors it at each command position (quotes, wrappers, ssh and sh -c strings lexed).";
     };
@@ -121,17 +129,59 @@ let
     };
   };
 
-  strList = description: mkOption {
-    type = types.listOf types.str;
-    default = [ ];
-    inherit description;
-  };
+  strList =
+    description:
+    mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      inherit description;
+    };
 
   prefilter = {
     extraCommands = strList "Commands added to guardrail's prefilter (rules/prefilter.yaml); an unscoped rule whose command is not listed never fires.";
     removedCommands = strList "Default prefilter commands to drop.";
     extraKeywords = strList "Keywords (ASCII case-insensitive, anywhere in the command) that send a command to the rule engine.";
     extraMarkers = strList "Byte sequences that send a command to the rule engine.";
+  };
+
+  wrapper = {
+    name = mkOption {
+      type = types.str;
+      description = "A command word that precedes the real command (`sudo`, `env`).";
+    };
+    valueFlags = strList "Its flags that take a value.";
+    positionals = mkOption {
+      type = types.ints.unsigned;
+      default = 0;
+      description = "Positional words it reads before the real command.";
+    };
+  };
+
+  remoteShell = {
+    command = mkOption {
+      type = types.listOf types.str;
+      description = "The words that name it, e.g. [ \"tailscale\" \"ssh\" ].";
+    };
+    valueFlags = strList "Its flags that take a value.";
+    positionals = mkOption {
+      type = types.ints.unsigned;
+      default = 1;
+      description = "Words (the host) before the command it hands on; a `--` after them is dropped.";
+    };
+  };
+
+  lexicon = {
+    extraShells = strList "Shells added to rules/lexicon.yaml: their `-c` string and heredoc are lexed as commands.";
+    extraWrappers = mkOption {
+      type = types.listOf (types.submodule { options = wrapper; });
+      default = [ ];
+      description = "Wrappers added to rules/lexicon.yaml.";
+    };
+    extraRemoteShells = mkOption {
+      type = types.listOf (types.submodule { options = remoteShell; });
+      default = [ ];
+      description = "Commands that run the rest of their line on another host, added to rules/lexicon.yaml.";
+    };
   };
 
   visibilityFile = {
@@ -161,28 +211,36 @@ let
     };
   };
 
-  actions = [ "check" "inputLimit" "searchNudge" "searchAdvise" "mintAdvise" "genLockTie" "generatedTree" "privateTermsGate" "exec" ];
+  actions = [
+    "check"
+    "inputLimit"
+    "searchNudge"
+    "searchAdvise"
+    "mintAdvise"
+    "genLockTie"
+    "generatedTree"
+    "privateTermsGate"
+    "exec"
+  ];
 
-  hookAction =
-    { config, ... }:
-    {
-      options = {
-        action = mkOption {
-          type = types.enum actions;
-          description = "What the action does.";
-        };
-        matcher = nullStr "Claude Code matcher syntax: null, empty or `*` matches all, `A|B` exact names, anything else a regex.";
-        command = mkOption {
-          type =
-            if config.action == "exec" then
-              types.addCheck (types.listOf types.str) (c: c != [ ])
-            else
-              types.addCheck (types.listOf types.str) (c: c == [ ]);
-          default = [ ];
-          description = "argv for an exec action (non-empty); must be empty for every other action.";
-        };
+  hookAction = { config, ... }: {
+    options = {
+      action = mkOption {
+        type = types.enum actions;
+        description = "What the action does.";
+      };
+      matcher = nullStr "Claude Code matcher syntax: null, empty or `*` matches all, `A|B` exact names, anything else a regex.";
+      command = mkOption {
+        type =
+          if config.action == "exec" then
+            types.addCheck (types.listOf types.str) (c: c != [ ])
+          else
+            types.addCheck (types.listOf types.str) (c: c == [ ]);
+        default = [ ];
+        description = "argv for an exec action (non-empty); must be empty for every other action.";
       };
     };
+  };
 
   suite = {
     enable = mkOption {
@@ -228,6 +286,7 @@ let
     };
     changeWindowFiles = strList "Files of change windows (`{changeWindows: [...]}`) written at run time, merged with changeWindows; a missing file opens nothing.";
     prefilter = prefilter;
+    lexicon = lexicon;
     privateTerms = privateTerms;
     hooks = mkOption {
       type = types.submodule {
@@ -281,6 +340,9 @@ in
     toolInputLimit
     changeWindow
     prefilter
+    lexicon
+    wrapper
+    remoteShell
     privateTerms
     visibilityFile
     actions

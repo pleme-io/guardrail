@@ -134,6 +134,26 @@ let
       extraKeywords = [ "fixturekw" ];
       extraMarkers = [ "<<fixture>>" ];
     };
+    lexicon = {
+      extraShells = [ "fixturesh" ];
+      extraWrappers = [
+        {
+          name = "fixturewrap";
+          valueFlags = [ "-x" ];
+          positionals = 1;
+        }
+      ];
+      extraRemoteShells = [
+        {
+          command = [
+            "fixturectl"
+            "exec"
+          ];
+          valueFlags = [ "-n" ];
+          positionals = 1;
+        }
+      ];
+    };
     privateTerms = {
       enable = true;
       terms = [ "tenant-a" ];
@@ -200,7 +220,8 @@ let
   cfg = config.blackmatter.components.claude.guardrail;
   r = render config;
 
-  renderedRules = r.yaml.extraRules ++ lib.concatMap (s: map r.renderRule s.rules) (lib.attrValues r.suites);
+  renderedRules =
+    r.yaml.extraRules ++ lib.concatMap (s: map r.renderRule s.rules) (lib.attrValues r.suites);
   examples = lib.concatMap (x: x.examples.block or [ ] ++ x.examples.allow or [ ]) renderedRules;
   keysOf = xs: lib.unique (lib.concatMap builtins.attrNames xs);
   sorted = xs: lib.sort lib.lessThan xs;
@@ -213,6 +234,9 @@ let
     toolInputLimit = keysOf r.yaml.toolInputLimits;
     changeWindow = keysOf r.yaml.changeWindows;
     prefilter = builtins.attrNames r.yaml.prefilter;
+    lexicon = builtins.attrNames r.yaml.lexicon;
+    wrapper = keysOf r.yaml.lexicon.extraWrappers;
+    remoteShell = keysOf r.yaml.lexicon.extraRemoteShells;
     privateTerms = builtins.attrNames r.yaml.privateTerms;
     visibilityFile = keysOf r.yaml.privateTerms.visibilityFiles;
     actions = lib.unique (lib.concatMap (map (a: a.action)) (lib.attrValues r.yaml.hooks));
@@ -226,6 +250,9 @@ let
     toolInputLimit = builtins.attrNames t.toolInputLimit;
     changeWindow = builtins.attrNames t.changeWindow;
     prefilter = builtins.attrNames t.prefilter;
+    lexicon = builtins.attrNames t.lexicon;
+    wrapper = builtins.attrNames t.wrapper;
+    remoteShell = builtins.attrNames t.remoteShell;
     privateTerms = builtins.attrNames t.privateTerms;
     visibilityFile = builtins.attrNames t.visibilityFile;
     inherit (t) actions;
@@ -236,20 +263,30 @@ let
   expected = pkgs.writeText "guardrail-module-schema.json" (builtins.toJSON declared);
 
   payload =
-    assert lib.assertMsg (uncovered == { })
-      "nix/checks.nix: the fixture does not set every option; uncovered: ${builtins.toJSON uncovered}";
-    assert lib.assertMsg (cfg.checkTools == [ "Bash" "Write" "Read" ])
-      "nix/checks.nix: checkTools is ${builtins.toJSON cfg.checkTools}";
-    assert lib.assertMsg (cfg.hookRegistrations == {
-      PreToolUse = "Bash|Edit|mcp__fixture__comment";
-      PostToolUse = null;
-      Stop = null;
-    }) "nix/checks.nix: hookRegistrations is ${builtins.toJSON cfg.hookRegistrations}";
+    assert lib.assertMsg (
+      uncovered == { }
+    ) "nix/checks.nix: the fixture does not set every option; uncovered: ${builtins.toJSON uncovered}";
+    assert lib.assertMsg (
+      cfg.checkTools == [
+        "Bash"
+        "Write"
+        "Read"
+      ]
+    ) "nix/checks.nix: checkTools is ${builtins.toJSON cfg.checkTools}";
+    assert lib.assertMsg (
+      cfg.hookRegistrations == {
+        PreToolUse = "Bash|Edit|mcp__fixture__comment";
+        PostToolUse = null;
+        Stop = null;
+      }
+    ) "nix/checks.nix: hookRegistrations is ${builtins.toJSON cfg.hookRegistrations}";
     config.home.file.".config/guardrail/guardrail.yaml".source;
 
   rejected = expr: !(builtins.tryEval (builtins.deepSeq expr expr)).success;
 
-  typoRule = removeAttrs rule [ "pattern" ] // { patern = rule.pattern; };
+  typoRule = removeAttrs rule [ "pattern" ] // {
+    patern = rule.pattern;
+  };
 
   brokenExample = rule // {
     name = "fixture-broken";
@@ -257,24 +294,37 @@ let
   };
 in
 {
-  guardrail-module-roundtrip = pkgs.runCommand "guardrail-module-roundtrip" {
-    nativeBuildInputs = [ package ];
-  } ''
-    guardrail schema --expect ${expected}
-    cp ${payload} $out
-  '';
+  guardrail-module-roundtrip =
+    pkgs.runCommand "guardrail-module-roundtrip" { nativeBuildInputs = [ package ]; }
+      ''
+        guardrail schema --expect ${expected}
+        cp ${payload} $out
+      '';
 
   guardrail-module-refuses-a-misspelled-rule-key =
-    assert lib.assertMsg (rejected (evaluate (fixture // { extraRules = [ typoRule ]; })).home.file)
-      "a misspelled rule key evaluated";
-    assert lib.assertMsg (rejected (evaluate (fixture // { extraRules = [ (rule // { severity = "deny"; }) ]; })).home.file)
-      "an unknown severity evaluated";
-    assert lib.assertMsg (rejected (evaluate (fixture // { categories.Fixture = false; })).home.file)
-      "an uppercase category evaluated";
+    assert lib.assertMsg (rejected
+      (evaluate (fixture // { extraRules = [ typoRule ]; })).home.file
+    ) "a misspelled rule key evaluated";
+    assert lib.assertMsg (rejected
+      (evaluate (fixture // { extraRules = [ (rule // { severity = "deny"; }) ]; })).home.file
+    ) "an unknown severity evaluated";
+    assert lib.assertMsg (rejected
+      (evaluate (fixture // { categories.Fixture = false; })).home.file
+    ) "an uppercase category evaluated";
     pkgs.emptyFile;
 
   guardrail-module-refuses-a-broken-example = pkgs.testers.testBuildFailure (
-    (render (evaluate (fixture // { extraRules = [ rule brokenExample ]; }))).gated
+    (render (
+      evaluate (
+        fixture
+        // {
+          extraRules = [
+            rule
+            brokenExample
+          ];
+        }
+      )
+    )).gated
   );
 
   guardrail-validate-refuses-an-unknown-yaml-key = pkgs.testers.testBuildFailure (

@@ -1,0 +1,43 @@
+# Lexicon data: how the command lexer (src/shell.rs) finds the command a shell
+# line runs. Extend per machine with guardrail.yaml `lexicon.extraShells` /
+# `extraWrappers` / `extraRemoteShells`; the entries here are never removed.
+
+# Shells that run a `-c` string or a heredoc body as commands.
+shells: [sh, bash, zsh, dash, ksh, fish]
+
+# Words that precede the real command: the flags that take a value, and how
+# many positional words come before the command.
+wrappers:
+  - name: sudo
+    valueFlags: [-u, -g, -h, -p, -C, -D, -r, -t, -U, -T]
+  - name: doas
+    valueFlags: [-u, -C]
+  - name: env
+    valueFlags: [-u, -C, -S]
+  - name: nohup
+  - name: exec
+    valueFlags: [-a]
+  - name: command
+  - name: builtin
+  - name: nice
+    valueFlags: [-n]
+  - name: setsid
+  - name: stdbuf
+    valueFlags: [-i, -o, -e]
+  - name: timeout
+    valueFlags: [-s, -k]
+    positionals: 1
+  - name: xargs
+    valueFlags: [-n, -I, -L, -P, -d, -E, -s, -a]
+
+# Commands that run the rest of their line, or a heredoc, on another host or
+# in another machine: `command` is the words that name it, `positionals` the
+# words (the host) before the handed-on command, and a `--` after them is
+# dropped.
+remoteShells:
+  - command: [ssh]
+    valueFlags: &ssh [-B, -b, -c, -D, -E, -e, -F, -I, -i, -J, -L, -l, -m, -O, -o, -p, -Q, -R, -S, -W, -w]
+    positionals: 1
+  - command: [tailscale, ssh]
+    valueFlags: *ssh
+    positionals: 1

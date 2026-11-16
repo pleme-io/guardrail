@@ -10,92 +10,14 @@
 
 use std::path::Path;
 
+use crate::lexicon::{Lexicon, RemoteShell};
+
 /// Nesting depth past which a handed-on command string is not lexed again.
 const MAX_DEPTH: usize = 8;
 
 /// Shell words that precede a command without being one.
 const KEYWORDS: &[&str] = &[
     "!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until", "time",
-];
-
-/// Shells that run a `-c` string or a heredoc body as commands.
-const SHELLS: &[&str] = &["sh", "bash", "zsh", "dash", "ksh", "fish"];
-
-/// ssh flags that take a value, so the host is the first word after them.
-const SSH_VALUE_FLAGS: &[&str] = &[
-    "-B", "-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l", "-m", "-O", "-o", "-p",
-    "-Q", "-R", "-S", "-W", "-w",
-];
-
-/// A wrapper whose argument is the real command: its name, the flags that take
-/// a value, and how many positional words it reads before the command.
-struct Wrapper {
-    name: &'static str,
-    value_flags: &'static [&'static str],
-    positionals: usize,
-}
-
-const WRAPPERS: &[Wrapper] = &[
-    Wrapper {
-        name: "sudo",
-        value_flags: &["-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "doas",
-        value_flags: &["-u", "-C"],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "env",
-        value_flags: &["-u", "-C", "-S"],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "nohup",
-        value_flags: &[],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "exec",
-        value_flags: &["-a"],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "command",
-        value_flags: &[],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "builtin",
-        value_flags: &[],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "nice",
-        value_flags: &["-n"],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "setsid",
-        value_flags: &[],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "stdbuf",
-        value_flags: &["-i", "-o", "-e"],
-        positionals: 0,
-    },
-    Wrapper {
-        name: "timeout",
-        value_flags: &["-s", "-k"],
-        positionals: 1,
-    },
-    Wrapper {
-        name: "xargs",
-        value_flags: &["-n", "-I", "-L", "-P", "-d", "-E", "-s", "-a"],
-        positionals: 0,
-    },
 ];
 
 #[derive(Default)]
@@ -111,18 +33,30 @@ struct Lexed {
 }
 
 /// Every command `text` runs, each as its head's basename followed by its
-/// unquoted arguments, one space apart.
+/// unquoted arguments, one space apart, read with the shipped lexicon.
 #[must_use]
 pub fn commands(text: &str) -> Vec<String> {
+    commands_with(text, Lexicon::shipped())
+}
+
+/// Every command `text` runs, read with `lexicon`.
+#[must_use]
+pub fn commands_with(text: &str, lexicon: &Lexicon) -> Vec<String> {
     let mut out = Vec::new();
-    collect(text, 0, &mut out);
+    collect(text, 0, lexicon, &mut out);
     out
+}
+
+/// Index of the word a segment executes, with the shipped lexicon.
+#[must_use]
+pub fn command_head<S: AsRef<str>>(words: &[S]) -> Option<usize> {
+    command_head_with(words, Lexicon::shipped())
 }
 
 /// Index of the word a segment executes: past `VAR=value` assignments, shell
 /// keywords, and wrappers with their flags and positional words.
 #[must_use]
-pub fn command_head<S: AsRef<str>>(words: &[S]) -> Option<usize> {
+pub fn command_head_with<S: AsRef<str>>(words: &[S], lexicon: &Lexicon) -> Option<usize> {
     let mut i = 0;
     while i < words.len() {
         let w = words[i].as_ref();
@@ -130,7 +64,7 @@ pub fn command_head<S: AsRef<str>>(words: &[S]) -> Option<usize> {
             i += 1;
             continue;
         }
-        let Some(wrapper) = WRAPPERS.iter().find(|x| x.name == basename(w)) else {
+        let Some(wrapper) = lexicon.wrapper(basename(w)) else {
             return Some(i);
         };
         i += 1;
@@ -139,7 +73,7 @@ pub fn command_head<S: AsRef<str>>(words: &[S]) -> Option<usize> {
             if is_assignment(flag) {
                 i += 1;
             } else if flag.starts_with('-') {
-                i += if wrapper.value_flags.contains(&flag) {
+                i += if wrapper.value_flags.iter().any(|v| v == flag) {
                     2
                 } else {
                     1
@@ -153,38 +87,43 @@ pub fn command_head<S: AsRef<str>>(words: &[S]) -> Option<usize> {
     None
 }
 
-fn collect(text: &str, depth: usize, out: &mut Vec<String>) {
+fn collect(text: &str, depth: usize, lexicon: &Lexicon, out: &mut Vec<String>) {
     if depth > MAX_DEPTH {
         return;
     }
     let lexed = lex(text);
     for inner in &lexed.nested {
-        collect(inner, depth + 1, out);
+        collect(inner, depth + 1, lexicon, out);
     }
     for segment in &lexed.segments {
-        resolve(segment, depth, out);
+        resolve(segment, depth, lexicon, out);
     }
 }
 
-fn resolve(segment: &Segment, depth: usize, out: &mut Vec<String>) {
+fn resolve(segment: &Segment, depth: usize, lexicon: &Lexicon, out: &mut Vec<String>) {
     let words = &segment.words;
-    let Some(head) = command_head(words) else {
+    let Some(head) = command_head_with(words, lexicon) else {
         return;
     };
     let name = basename(&words[head]);
     let rest = &words[head + 1..];
-    let handed_on = match name {
-        "ssh" => ssh_remote(rest),
-        "eval" => Some(rest.join(" ")),
-        n if SHELLS.contains(&n) => shell_script(rest),
-        _ => None,
+    let remote = lexicon.remote_shell(name, rest);
+    let shell = lexicon.is_shell(name);
+    let handed_on = if let Some((spec, args)) = remote {
+        remote_command(spec, args)
+    } else if name == "eval" {
+        Some(rest.join(" "))
+    } else if shell {
+        shell_script(rest)
+    } else {
+        None
     };
     if let Some(inner) = handed_on {
-        collect(&inner, depth + 1, out);
+        collect(&inner, depth + 1, lexicon, out);
     }
-    if name == "ssh" || SHELLS.contains(&name) {
+    if remote.is_some() || shell {
         for body in &segment.heredocs {
-            collect(body, depth + 1, out);
+            collect(body, depth + 1, lexicon, out);
         }
     }
     let mut command = name.to_owned();
@@ -195,17 +134,21 @@ fn resolve(segment: &Segment, depth: usize, out: &mut Vec<String>) {
     out.push(command);
 }
 
-/// The remote command of `ssh [flags] host <cmd…>`, joined as ssh joins it.
-fn ssh_remote(args: &[String]) -> Option<String> {
+/// The command a remote shell hands on: past its flags and positional words
+/// (the host), and past a `--`, joined as ssh joins it.
+fn remote_command(spec: &RemoteShell, args: &[String]) -> Option<String> {
     let mut i = 0;
     while i < args.len() && args[i].starts_with('-') {
-        i += if SSH_VALUE_FLAGS.contains(&args[i].as_str()) {
+        i += if spec.value_flags.iter().any(|v| *v == args[i]) {
             2
         } else {
             1
         };
     }
-    let remote = args.get(i + 1..)?;
+    let mut remote = args.get(i + spec.positionals..)?;
+    if remote.first().is_some_and(|w| w == "--") {
+        remote = &remote[1..];
+    }
     (!remote.is_empty()).then(|| remote.join(" "))
 }
 
@@ -501,6 +444,23 @@ mod tests {
         assert!(commands("echo \"$(reboot)\"").contains(&"reboot".to_owned()));
         assert!(commands("echo `halt`").contains(&"halt".to_owned()));
         assert!(commands("ssh rio <<'EOF'\nsudo reboot\nEOF").contains(&"reboot".to_owned()));
+    }
+
+    #[test]
+    fn tailscale_ssh_hands_its_command_on_like_ssh() {
+        assert!(
+            commands("tailscale ssh rio -- sudo systemctl reboot")
+                .contains(&"systemctl reboot".to_owned())
+        );
+        assert!(commands("tailscale ssh root@rio sudo reboot").contains(&"reboot".to_owned()));
+        assert!(
+            commands("tailscale ssh rio <<'EOF'\npoweroff\nEOF").contains(&"poweroff".to_owned())
+        );
+        assert!(
+            !commands("tailscale status")
+                .iter()
+                .any(|c| c.starts_with("reboot"))
+        );
     }
 
     #[test]

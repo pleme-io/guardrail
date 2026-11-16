@@ -8,6 +8,7 @@ pub mod genlock;
 pub mod gitcall;
 pub mod hook;
 pub mod journal;
+pub mod lexicon;
 pub mod limits;
 pub mod model;
 pub mod privateterms;

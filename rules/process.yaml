@@ -55,6 +55,7 @@
       - "systemctl reboot"
       - "shutdown -h now"
       - "ssh rio 'sudo reboot'"
+      - "tailscale ssh rio -- sudo systemctl reboot"
       - "true && poweroff"
       - "halt"
     allow:
