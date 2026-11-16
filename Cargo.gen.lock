@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "a3f34d13d73514477ad578d43ab4da18b473409e338c9daaa4061c56509a2200",
+  "cargo_lock_sha256": "5085f684f249eee7c1e833e1dab6c53cf2a7b0ddc9f71cea135342e8582266d6",
   "manifest_sha256": {
-    "Cargo.toml": "eee46d218df7b42f0bb6b8bf093bdf4a95ea70a8a9c1c6ffe4b352a830afe099"
+    "Cargo.toml": "1f675d28de7fff8b2f7ea98f7acc115ff0fe0e875d4982f18c444d09fff0c5ca"
   },
   "target_resolves": {
     "base": {
@@ -418,7 +418,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "const-oid-0.10.2": {
+      "const-oid-0.10.3": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -458,7 +458,7 @@
           },
           {
             "name": "const_oid",
-            "package_key": "const-oid-0.10.2",
+            "package_key": "const-oid-0.10.3",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -490,7 +490,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "errno-0.3.14": {
+      "errno-0.3.15": {
         "runtime_dependencies": [
           {
             "name": "libc",
@@ -653,7 +653,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "guardrail-0.1.28": {
+      "guardrail-0.1.29": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -1758,7 +1758,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1768,7 +1768,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1778,7 +1778,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1891,7 +1891,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1901,7 +1901,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1911,7 +1911,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2055,7 +2055,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2065,7 +2065,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2075,7 +2075,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2166,7 +2166,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2176,7 +2176,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2186,7 +2186,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2258,7 +2258,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2268,7 +2268,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2278,7 +2278,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2381,7 +2381,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2391,7 +2391,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2401,7 +2401,7 @@
               },
               {
                 "name": "libc_errno",
-                "package_key": "errno-0.3.14",
+                "package_key": "errno-0.3.15",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -2540,7 +2540,7 @@
     "colorchoice-1.0.5": {
       "edition": "2021"
     },
-    "const-oid-0.10.2": {
+    "const-oid-0.10.3": {
       "edition": "2024"
     },
     "cpufeatures-0.3.1": {
@@ -2558,7 +2558,7 @@
     "equivalent-1.0.3": {
       "edition": "2015"
     },
-    "errno-0.3.14": {
+    "errno-0.3.15": {
       "edition": "2018"
     },
     "fastrand-2.5.0": {
@@ -2571,7 +2571,7 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "guardrail-0.1.28": {
+    "guardrail-0.1.29": {
       "edition": "2024",
       "lib_target": {
         "name": "guardrail",
