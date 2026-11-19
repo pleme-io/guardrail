@@ -83,6 +83,21 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         matcher: Option<String>,
     },
+    React {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        matcher: Option<String>,
+        reaction: crate::react::Reaction,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sound: Option<String>,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "minTurnSecs"
+        )]
+        min_turn_secs: Option<u64>,
+        #[serde(default)]
+        enabled: bool,
+    },
     Exec {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         matcher: Option<String>,
@@ -102,6 +117,7 @@ impl Action {
             | Self::GenLockTie { matcher }
             | Self::GeneratedTree { matcher }
             | Self::PrivateTermsGate { matcher }
+            | Self::React { matcher, .. }
             | Self::Exec { matcher, .. } => matcher.as_deref(),
         }
     }
@@ -117,7 +133,7 @@ impl Action {
             Self::GenLockTie { .. } => Some(Builtin::GenLockTie),
             Self::GeneratedTree { .. } => Some(Builtin::GeneratedTree),
             Self::PrivateTermsGate { .. } => Some(Builtin::PrivateTermsGate),
-            Self::Exec { .. } => None,
+            Self::React { .. } | Self::Exec { .. } => None,
         }
     }
 }
@@ -319,6 +335,27 @@ pub fn dispatch(name: &str, raw: &str, table: &HookTable, builtins: &dyn Builtin
         let outcome = match (action.builtin(), action) {
             (Some(b), _) => builtins.run(b, name, &input),
             (None, Action::Exec { command, .. }) => exec(command, raw),
+            (
+                None,
+                Action::React {
+                    reaction,
+                    sound,
+                    min_turn_secs,
+                    enabled,
+                    ..
+                },
+            ) => {
+                crate::react::run(
+                    &crate::react::Spec {
+                        reaction: *reaction,
+                        sound: sound.clone(),
+                        min_turn_secs: *min_turn_secs,
+                        enabled: *enabled,
+                    },
+                    raw,
+                );
+                Outcome::Pass
+            }
             (None, _) => Outcome::Pass,
         };
         match outcome {
@@ -389,12 +426,24 @@ pub fn validate(table: &HookTable) -> Vec<String> {
                 ActionEntry::Valid(a) => a,
                 ActionEntry::Invalid(raw) => {
                     failures.push(format!(
-                        "{at}: not a valid action (one of check, inputLimit, searchNudge, searchAdvise, mintAdvise, genLockTie, generatedTree, privateTermsGate, exec with a command): {}",
+                        "{at}: not a valid action (one of check, inputLimit, searchNudge, searchAdvise, mintAdvise, genLockTie, generatedTree, privateTermsGate, react, exec with a command): {}",
                         serde_json::to_string(raw).unwrap_or_default()
                     ));
                     continue;
                 }
             };
+            if let Action::React {
+                reaction: crate::react::Reaction::Mark,
+                sound,
+                min_turn_secs,
+                ..
+            } = action
+                && (sound.is_some() || min_turn_secs.is_some())
+            {
+                failures.push(format!(
+                    "{at}: a mark reaction takes no sound or minTurnSecs"
+                ));
+            }
             if matches!(action, Action::Exec { command, .. } if command.is_empty()) {
                 failures.push(format!("{at}: exec needs a non-empty command"));
             }
@@ -511,6 +560,37 @@ mod tests {
                 vec![(builtin, "PreToolUse".to_string())]
             );
         }
+    }
+
+    #[test]
+    fn a_react_action_parses_defaults_off_and_validates() {
+        let t = table("Stop:\n  - action: react\n    reaction: sound\n    minTurnSecs: 90");
+        assert!(validate(&t).is_empty());
+        let ActionEntry::Valid(Action::React {
+            enabled,
+            min_turn_secs,
+            ..
+        }) = &t["Stop"][0]
+        else {
+            panic!("react did not parse");
+        };
+        assert!(!enabled);
+        assert_eq!(*min_turn_secs, Some(90));
+        assert_eq!(
+            t["Stop"][0],
+            serde_norway::from_str::<ActionEntry>(&serde_norway::to_string(&t["Stop"][0]).unwrap())
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn a_react_action_with_an_unknown_reaction_or_key_is_refused_alone() {
+        let t = table(
+            "Stop:\n  - action: react\n    reaction: shout\n  - action: react\n    reaction: sound\n    bogus: 1\n  - action: react\n    reaction: mark\n    sound: x",
+        );
+        let f = validate(&t);
+        assert_eq!(f.len(), 3, "{f:?}");
+        assert!(f[2].contains("mark reaction takes no sound"));
     }
 
     #[test]

@@ -13,6 +13,7 @@ pub mod limits;
 pub mod model;
 pub mod privateterms;
 pub mod production;
+pub mod react;
 pub mod schema;
 pub mod scope;
 pub mod shell;

@@ -220,6 +220,7 @@ let
     "genLockTie"
     "generatedTree"
     "privateTermsGate"
+    "react"
     "exec"
   ];
 
@@ -238,6 +239,22 @@ let
             types.addCheck (types.listOf types.str) (c: c == [ ]);
         default = [ ];
         description = "argv for an exec action (non-empty); must be empty for every other action.";
+      };
+      reaction = mkOption {
+        type = types.nullOr (types.enum [ "mark" "sound" ]);
+        default = null;
+        description = "For a react action: `mark` records the turn start (bind it to UserPromptSubmit), `sound` plays a sound (bind it to Stop). Required for react, null for every other action.";
+      };
+      sound = nullStr "For a sound reaction: the audio file afplay plays; null plays the system Glass sound.";
+      minTurnSecs = mkOption {
+        type = types.nullOr types.ints.positive;
+        default = null;
+        description = "For a sound reaction: react only when the turn lasted at least this many seconds since the mark; null reacts every time.";
+      };
+      enabled = mkOption {
+        type = types.bool;
+        default = false;
+        description = "For a react action: off by default, the behaviour stays declared and tested and is switched on here.";
       };
     };
   };

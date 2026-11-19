@@ -1080,3 +1080,42 @@ fn the_private_terms_gate_blocks_a_staged_term_in_a_public_repo_through_the_hook
         .assert()
         .success();
 }
+
+const PROMPT: &str = r#"{"hook_event_name":"UserPromptSubmit","session_id":"s1","prompt":"x"}"#;
+
+fn react_state(yaml: &str) -> (TempDir, TempDir, TempDir) {
+    let (config, cache) = hook_config(yaml);
+    (config, cache, TempDir::new().unwrap())
+}
+
+#[test]
+fn hook_react_mark_writes_the_turn_start_under_the_state_home() {
+    let (config, cache, state) = react_state(
+        "hooks:\n  UserPromptSubmit:\n    - action: react\n      reaction: mark\n      enabled: true\n",
+    );
+    guardrail_in(&config, &cache, &["hook", "UserPromptSubmit"])
+        .env("XDG_STATE_HOME", state.path())
+        .write_stdin(PROMPT)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+    let mark = state.path().join("guardrail/turns/s1");
+    let secs: u64 = fs::read_to_string(&mark).unwrap().trim().parse().unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    assert!(now.abs_diff(secs) < 60, "mark {secs} vs now {now}");
+}
+
+#[test]
+fn hook_react_is_off_until_enabled() {
+    let (config, cache, state) =
+        react_state("hooks:\n  UserPromptSubmit:\n    - action: react\n      reaction: mark\n");
+    guardrail_in(&config, &cache, &["hook", "UserPromptSubmit"])
+        .env("XDG_STATE_HOME", state.path())
+        .write_stdin(PROMPT)
+        .assert()
+        .success();
+    assert!(!state.path().join("guardrail").exists());
+}

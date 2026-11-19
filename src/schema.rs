@@ -66,6 +66,7 @@ pub fn names_of<'de, T: Deserialize<'de>>() -> Vec<&'static str> {
 #[must_use]
 pub fn schema() -> Value {
     let mut actions = names_of::<Builtin>();
+    actions.push("react");
     actions.push("exec");
     json!({
         "config": names_of::<GuardrailConfig>(),
@@ -180,6 +181,7 @@ mod tests {
                 "genLockTie",
                 "generatedTree",
                 "privateTermsGate",
+                "react",
                 "exec"
             ])
         );

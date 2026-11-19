@@ -200,7 +200,19 @@ let
         }
         { action = "searchNudge"; }
       ];
+      UserPromptSubmit = [
+        {
+          action = "react";
+          reaction = "mark";
+          enabled = true;
+        }
+      ];
       Stop = [
+        {
+          action = "react";
+          reaction = "sound";
+          minTurnSecs = 60;
+        }
         {
           action = "exec";
           command = [ "/usr/bin/true" ];
@@ -278,6 +290,7 @@ let
         PreToolUse = "Bash|Edit|mcp__fixture__comment";
         PostToolUse = null;
         Stop = null;
+        UserPromptSubmit = null;
       }
     ) "nix/checks.nix: hookRegistrations is ${builtins.toJSON cfg.hookRegistrations}";
     config.home.file.".config/guardrail/guardrail.yaml".source;

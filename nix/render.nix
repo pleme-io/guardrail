@@ -24,7 +24,10 @@ let
       inherit (a) action;
     }
     // lib.optionalAttrs (a.matcher != null) { inherit (a) matcher; }
-    // lib.optionalAttrs (a.command != [ ]) { inherit (a) command; };
+    // lib.optionalAttrs (a.command != [ ]) { inherit (a) command; }
+    // lib.optionalAttrs (a.reaction != null) { inherit (a) reaction enabled; }
+    // lib.optionalAttrs (a.sound != null) { inherit (a) sound; }
+    // lib.optionalAttrs (a.minTurnSecs != null) { inherit (a) minTurnSecs; };
 
   hooks = lib.filterAttrs (_: actions: actions != [ ]) cfg.hooks;
 

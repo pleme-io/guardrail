@@ -241,10 +241,23 @@ hooks:
   PostToolUse:
     - action: searchAdvise   # also searchNudge, mintAdvise, genLockTie
       matcher: Grep|Glob
+  UserPromptSubmit:
+    - action: react          # mark: record the turn start for this session
+      reaction: mark
+      enabled: true
   Stop:
+    - action: react          # sound: afplay when the turn ran at least 90 s
+      reaction: sound
+      minTurnSecs: 90
+      enabled: true
     - action: exec           # payload on stdin; its decision is passed through
       command: [/path/to/tool, --flag]
 ```
+
+`react` never blocks and never fails the session: a missing session id, an
+unwritable state directory or a failed spawn is reported on stderr and skipped.
+It is off until `enabled: true`. The turn start lives under
+`$XDG_STATE_HOME/guardrail/turns/<session>`.
 
 A matcher follows Claude Code's rules: empty or `*` matches everything, `A|B`
 matches those exact names, anything else is a regex. A block or a `decision:
